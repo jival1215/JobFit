@@ -9,7 +9,6 @@ The project intentionally avoids paid APIs, authentication, databases, and compl
 - Upload resumes as PDF, DOCX, or TXT.
 - Extract resume text locally.
 - Fetch postings from the SimplifyJobs Summer 2026 internships repo.
-- Optionally search US jobs through `/private/tmp/us_job_finder.py`.
 - Parse changing GitHub markdown/HTML job tables.
 - Extract company, role, location, application link, age, and category.
 - Rank jobs using keyword similarity, skill overlap, role title fit, location preference, and posting freshness.
@@ -64,4 +63,3 @@ https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README
 
 You can paste another compatible SimplifyJobs raw README URL in the sidebar, such as an off-season or new-grad list.
 
-The app also supports an optional US Job Finder source. In the sidebar, choose `US Job Finder` or `Both`, then set a query such as `software engineer`, a limit such as `50`, and a location such as `United States`. This uses the local tool at `/private/tmp/us_job_finder.py`.

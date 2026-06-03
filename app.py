@@ -9,7 +9,6 @@ from matcher import missing_skills_summary, rank_jobs
 from resume_utils import extract_resume_text
 from saved_jobs import load_statuses, merge_statuses, save_job_status
 from simplify_fetcher import DEFAULT_SIMPLIFY_URL, fetch_markdown, parse_simplify_jobs
-from us_job_finder_fetcher import run_us_job_finder
 
 
 st.set_page_config(page_title="JobFit", layout="wide")
@@ -19,11 +18,6 @@ st.set_page_config(page_title="JobFit", layout="wide")
 def load_jobs(repo_url: str) -> pd.DataFrame:
     markdown = fetch_markdown(repo_url)
     return parse_simplify_jobs(markdown)
-
-
-@st.cache_data(show_spinner=False, ttl=900)
-def load_us_job_finder_jobs(query: str, location: str, limit: int) -> pd.DataFrame:
-    return run_us_job_finder(query=query, location=location, limit=limit)
 
 
 def apply_filters(frame: pd.DataFrame, role_type: str, location: str, company: str, min_score: float) -> pd.DataFrame:
@@ -268,11 +262,7 @@ st.markdown(
 
 with st.sidebar:
     st.header("Search setup")
-    job_source = st.radio("Job source", ["SimplifyJobs", "US Job Finder", "Both"], horizontal=False)
     repo_url = st.text_input("SimplifyJobs raw README URL", DEFAULT_SIMPLIFY_URL)
-    us_query = st.text_input("US Job Finder query", "software engineer")
-    us_limit = st.number_input("US Job Finder limit", min_value=10, max_value=250, value=50, step=10)
-    us_location = st.text_input("US Job Finder location", "United States")
     resume_file = st.file_uploader("Resume", type=["pdf", "docx", "txt"])
     preferred_locations = st.text_input("Preferred locations", "remote, nyc, new york, new jersey, nj, philadelphia, pa")
     preferred_role_types = st.multiselect(
@@ -284,8 +274,7 @@ with st.sidebar:
     refresh_repo = st.button("Refresh GitHub repo", use_container_width=True)
     if refresh_repo:
         load_jobs.clear()
-        load_us_job_finder_jobs.clear()
-        st.success("Job source cache cleared. Click Rank jobs to fetch fresh postings.")
+        st.success("GitHub repo cache cleared. Click Rank jobs to fetch fresh postings.")
     st.caption("Postings are cached for 15 minutes unless refreshed manually.")
     run_button = st.button("Rank jobs", type="primary", use_container_width=True)
 
@@ -300,15 +289,8 @@ if run_button:
         st.error("I could not extract text from this resume.")
         st.stop()
 
-    source_frames = []
-    if job_source in {"SimplifyJobs", "Both"}:
-        with st.spinner("Fetching and parsing SimplifyJobs postings..."):
-            source_frames.append(load_jobs(repo_url))
-    if job_source in {"US Job Finder", "Both"}:
-        with st.spinner("Searching US Job Finder sources..."):
-            source_frames.append(load_us_job_finder_jobs(us_query, us_location, int(us_limit)))
-
-    jobs = pd.concat(source_frames, ignore_index=True, sort=False) if source_frames else pd.DataFrame()
+    with st.spinner("Fetching and parsing SimplifyJobs postings..."):
+        jobs = load_jobs(repo_url)
     jobs = jobs.fillna("").drop_duplicates(subset=["company", "role", "location", "application_link"]).reset_index(drop=True)
 
     with st.spinner("Ranking jobs..."):
