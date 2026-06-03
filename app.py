@@ -149,6 +149,28 @@ def inject_styles() -> None:
             border-radius: 7px;
             font-weight: 650;
         }
+        .apply-link {
+            display: block;
+            width: 100%;
+            text-align: center;
+            background: #168466;
+            color: #ffffff !important;
+            text-decoration: none !important;
+            border-radius: 7px;
+            padding: 0.52rem 0.8rem;
+            font-weight: 720;
+            border: 1px solid #117457;
+            margin-bottom: 8px;
+        }
+        .apply-link:hover {
+            background: #116f55;
+            border-color: #0d5e48;
+        }
+        .plain-link {
+            color: #315d7c;
+            font-size: 0.82rem;
+            overflow-wrap: anywhere;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -166,6 +188,20 @@ def skill_pills(skills: str, limit: int = 6) -> str:
         pills += f'<span class="pill">+{extra} more</span>'
     return pills
 
+
+
+def render_apply_button(url: str, label: str = "Apply") -> None:
+    url = str(url or "").strip()
+    if not url:
+        st.caption("No application link found")
+        return
+    safe_url = html.escape(url, quote=True)
+    safe_label = html.escape(label)
+    st.markdown(
+        f'<a class="apply-link" href="{safe_url}" target="_self">{safe_label}</a>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(f'<a class="plain-link" href="{safe_url}" target="_blank">Open in new tab</a>', unsafe_allow_html=True)
 
 def render_job_card(row: pd.Series, rank: int | None = None, compact: bool = False) -> None:
     rec = str(row.get("recommendation", "")).lower()
@@ -292,8 +328,7 @@ for index, (_, row) in enumerate(top_10.iterrows(), start=1):
     with cols[0]:
         render_job_card(row, index, compact=True)
     with cols[1]:
-        if row["application_link"]:
-            st.link_button("Apply", row["application_link"], use_container_width=True)
+        render_apply_button(row["application_link"], "Apply")
         st.caption(str(row.get("status", "")) or "Not marked")
 
 st.markdown('<div class="section-label">Missing Skills to Learn</div>', unsafe_allow_html=True)
@@ -347,8 +382,7 @@ for _, row in filtered.head(50).iterrows():
         with detail_cols[1]:
             st.write(f"**Category:** {row['category']}")
             st.write(f"**Age:** {row['age']}")
-            if row["application_link"]:
-                st.link_button("Open application", row["application_link"])
+            render_apply_button(row["application_link"], "Open application")
 
         status = st.radio(
             "Mark job",
