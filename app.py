@@ -198,10 +198,10 @@ def render_apply_button(url: str, label: str = "Apply") -> None:
     safe_url = html.escape(url, quote=True)
     safe_label = html.escape(label)
     st.markdown(
-        f'<a class="apply-link" href="{safe_url}" target="_self">{safe_label}</a>',
+        f'<a class="apply-link" href="{safe_url}" target="_blank" rel="noopener noreferrer">{safe_label}</a>',
         unsafe_allow_html=True,
     )
-    st.markdown(f'<a class="plain-link" href="{safe_url}" target="_blank">Open in new tab</a>', unsafe_allow_html=True)
+    st.markdown(f'<a class="plain-link" href="{safe_url}" target="_blank" rel="noopener noreferrer">Open in new tab</a>', unsafe_allow_html=True)
 
 def render_job_card(row: pd.Series, rank: int | None = None, compact: bool = False) -> None:
     rec = str(row.get("recommendation", "")).lower()
