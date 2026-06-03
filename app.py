@@ -11,7 +11,7 @@ from saved_jobs import load_statuses, merge_statuses, save_job_status
 from simplify_fetcher import DEFAULT_SIMPLIFY_URL, fetch_markdown, parse_simplify_jobs
 
 
-st.set_page_config(page_title="JobFit Simplify MVP", layout="wide")
+st.set_page_config(page_title="JobFit", layout="wide")
 
 
 @st.cache_data(show_spinner=False, ttl=900)
@@ -216,7 +216,7 @@ inject_styles()
 st.markdown(
     """
     <div class="hero">
-        <h1>JobFit Simplify MVP</h1>
+        <h1>JobFit</h1>
         <p>Upload your resume, refresh SimplifyJobs, and get a ranked apply-first list with skill gaps and tailoring notes.</p>
     </div>
     """,
