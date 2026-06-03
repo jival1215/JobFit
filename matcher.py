@@ -74,7 +74,7 @@ def recommendation(score: float) -> str:
 
 
 def _safe_job_text(row: pd.Series) -> str:
-    return " ".join(str(row.get(col, "")) for col in ["company", "role", "location", "category"])
+    return " ".join(str(row.get(col, "")) for col in ["company", "role", "location", "category", "description", "salary", "source"])
 
 
 def rank_jobs(
