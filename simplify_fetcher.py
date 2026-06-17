@@ -10,6 +10,14 @@ from bs4 import BeautifulSoup
 
 
 DEFAULT_SIMPLIFY_URL = "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README.md"
+OFF_SEASON_SIMPLIFY_URL = "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README-Off-Season.md"
+NEW_GRAD_SIMPLIFY_URL = "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/README.md"
+
+JOB_SOURCES = {
+    "Summer internships": DEFAULT_SIMPLIFY_URL,
+    "Fall internships": OFF_SEASON_SIMPLIFY_URL,
+    "Full time": NEW_GRAD_SIMPLIFY_URL,
+}
 
 
 @dataclass
