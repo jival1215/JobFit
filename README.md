@@ -65,7 +65,7 @@ You can paste another compatible SimplifyJobs raw README URL in the sidebar, suc
 
 ## Deployment
 
-The FastAPI backend lives in `backend_api.py`, not `app.py`. Some hosts auto-detect `app.py`, which is the legacy Streamlit app, so set the backend start command explicitly:
+The FastAPI backend lives in `backend_api.py`. For deployment hosts that auto-detect `app.py`, this repo now includes a tiny `app.py` shim that exposes `backend_api.app`. The legacy Streamlit UI is preserved as `streamlit_app.py`. You can still set the backend start command explicitly:
 
 ```bash
 uvicorn backend_api:app --host 0.0.0.0 --port $PORT
