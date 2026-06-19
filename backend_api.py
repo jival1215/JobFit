@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
 import re
 from io import BytesIO
 from typing import Any
@@ -19,9 +20,25 @@ from simplify_fetcher import JOB_SOURCES, fetch_markdown, parse_simplify_jobs
 
 app = FastAPI(title="JobFIT API", version="0.1.0")
 
+
+def _cors_origins() -> list[str]:
+    defaults = [
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
+        "https://jobfit-ebon.vercel.app",
+        "https://jobfit-q3g08x4sn-jp-projects2.vercel.app",
+    ]
+    configured = [
+        origin.strip()
+        for origin in os.getenv("FRONTEND_ORIGINS", "").split(",")
+        if origin.strip()
+    ]
+    return [*defaults, *configured]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:3000", "http://localhost:3000"],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
