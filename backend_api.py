@@ -216,6 +216,17 @@ def _records_from_ranked(ranked: pd.DataFrame, resume_text: str = "") -> list[di
     return records
 
 
+@app.get("/")
+def root() -> dict[str, Any]:
+    return {
+        "name": "JobFIT API",
+        "status": "ok",
+        "message": "This is the backend API. Deploy/open the Next.js frontend from the frontend directory to use the JobFIT website.",
+        "docs": "/docs",
+        "health": "/api/health",
+    }
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
