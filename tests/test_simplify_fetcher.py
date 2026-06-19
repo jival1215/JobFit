@@ -32,6 +32,24 @@ class SimplifyFetcherTests(unittest.TestCase):
         self.assertEqual(jobs.loc[0, "application_link"], "https://example.com/apply")
         self.assertIn("Data Science", jobs.loc[0, "category"])
 
+    def test_parse_simplify_uses_simplify_apply_link_as_fallback(self):
+        markdown = """
+## Software Engineering Internship Roles
+<table>
+<tr><th>Company</th><th>Role</th><th>Location</th><th>Application</th><th>Age</th></tr>
+<tr>
+<td>The Campbell's Company</td>
+<td>Agentic AI Engineer Co-op</td>
+<td>Camden, NJ</td>
+<td><a href="https://simplify.jobs/p/campbells-agentic-ai">Apply</a></td>
+<td>1mo</td>
+</tr>
+</table>
+"""
+        jobs = parse_simplify_jobs(markdown)
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs.loc[0, "application_link"], "https://simplify.jobs/p/campbells-agentic-ai")
+
 
 if __name__ == "__main__":
     unittest.main()

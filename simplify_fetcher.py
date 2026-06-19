@@ -48,9 +48,12 @@ def _clean_cell(value: str) -> str:
 
 def _first_link(value: str) -> str:
     soup = BeautifulSoup(value, "html.parser")
-    links = [a.get("href", "") for a in soup.find_all("a")]
-    apply_links = [link for link in links if "simplify.jobs/p/" not in link and link]
-    return html.unescape(apply_links[0]) if apply_links else ""
+    links = [html.unescape(a.get("href", "").strip()) for a in soup.find_all("a") if a.get("href", "").strip()]
+    if not links:
+        return ""
+
+    direct_apply_links = [link for link in links if "simplify.jobs/p/" not in link]
+    return direct_apply_links[0] if direct_apply_links else links[0]
 
 
 def _parse_html_table(table_html: str, category: str) -> list[JobPosting]:

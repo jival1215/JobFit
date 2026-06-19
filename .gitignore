@@ -8,3 +8,4 @@ saved_jobs.csv
 seen_jobs.csv
 frontend/node_modules/
 frontend/.next/
+frontend/.next.stale-*/
