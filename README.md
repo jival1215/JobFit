@@ -63,3 +63,23 @@ https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README
 
 You can paste another compatible SimplifyJobs raw README URL in the sidebar, such as an off-season or new-grad list.
 
+## Deployment
+
+The FastAPI backend lives in `backend_api.py`, not `app.py`. Some hosts auto-detect `app.py`, which is the legacy Streamlit app, so set the backend start command explicitly:
+
+```bash
+uvicorn backend_api:app --host 0.0.0.0 --port $PORT
+```
+
+For Render, this repo includes `render.yaml` with that command. For Procfile-based hosts, this repo includes:
+
+```bash
+web: uvicorn backend_api:app --host 0.0.0.0 --port $PORT
+```
+
+The Next.js frontend should be deployed from the `frontend/` directory and configured with:
+
+```bash
+NEXT_PUBLIC_JOBFIT_API_URL=https://your-backend-url
+```
+
