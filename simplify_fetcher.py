@@ -31,7 +31,16 @@ class JobPosting:
 
 
 def fetch_markdown(url: str = DEFAULT_SIMPLIFY_URL, timeout: int = 20) -> str:
-    response = requests.get(url, timeout=timeout)
+    response = requests.get(
+        url,
+        timeout=timeout,
+        headers={
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "User-Agent": "JobFIT/0.1 (+https://github.com/jival1215/JobFit)",
+        },
+        params={"jobfit_refresh": pd.Timestamp.utcnow().strftime("%Y%m%d%H%M%S")},
+    )
     response.raise_for_status()
     return response.text
 

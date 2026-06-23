@@ -25,6 +25,12 @@ export function MatchesClient({ fallbackJobs }: MatchesClientProps) {
   }, []);
 
   const jobs = ranked?.jobs ?? fallbackJobs;
+  const fetchedLabel = ranked?.fetchedAt
+    ? new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short"
+      }).format(new Date(ranked.fetchedAt))
+    : "";
   const filtered = useMemo(() => {
     return jobs.filter((job) => {
       const matchesRole = role ? job.title.toLowerCase().includes(role.toLowerCase()) : true;
@@ -43,12 +49,22 @@ export function MatchesClient({ fallbackJobs }: MatchesClientProps) {
           <h1 className="mt-4 text-4xl font-black tracking-tight text-ink sm:text-6xl">Apply-first job list.</h1>
           <p className="mt-4 max-w-2xl text-lg leading-8 text-slateSoft">
             {ranked
-              ? `Showing real backend results from ${ranked.source}. ${ranked.newCount} jobs were new in this scan.`
+              ? `Showing live SimplifyJobs results from ${ranked.source}${fetchedLabel ? `, refreshed ${fetchedLabel}` : ""}. ${ranked.newCount} jobs were new in this scan.`
               : "No backend scan is loaded yet, so this page is showing realistic mock matches."}
           </p>
         </div>
         <div className="rounded-2xl border border-line bg-white p-4 text-sm text-slate-600 shadow-sm">
-          Showing {filtered.length} of {jobs.length} matches
+          <p className="font-semibold text-ink">Showing {filtered.length} of {jobs.length} matches</p>
+          {ranked?.sourceUrl ? (
+            <a
+              href={ranked.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 block truncate text-brand-600 hover:text-brand-700"
+            >
+              Live source repo
+            </a>
+          ) : null}
         </div>
       </div>
       <div className="mt-8 rounded-3xl border border-line bg-white p-4 shadow-sm">

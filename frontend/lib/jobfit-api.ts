@@ -2,6 +2,8 @@ import type { JobMatch } from "./mock-data";
 
 export type RankResponse = {
   source: string;
+  sourceUrl?: string;
+  fetchedAt?: string;
   count: number;
   newCount: number;
   jobs: JobMatch[];

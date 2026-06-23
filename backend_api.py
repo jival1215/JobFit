@@ -4,6 +4,7 @@ import json
 import hashlib
 import os
 import re
+from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
 
@@ -277,7 +278,9 @@ async def rank_resume(
     if not resume_text:
         raise HTTPException(status_code=422, detail="Could not extract text from resume")
 
-    markdown = fetch_markdown(JOB_SOURCES[source])
+    source_url = JOB_SOURCES[source]
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    markdown = fetch_markdown(source_url)
     jobs = parse_simplify_jobs(markdown)
     jobs["source"] = source
     jobs = mark_new_jobs(jobs, source)
@@ -286,6 +289,8 @@ async def rank_resume(
 
     return {
         "source": source,
+        "sourceUrl": source_url,
+        "fetchedAt": fetched_at,
         "count": int(len(ranked)),
         "newCount": int(ranked.get("is_new", pd.Series(False, index=ranked.index)).sum()),
         "jobs": _records_from_ranked(ranked, resume_text),
