@@ -4,6 +4,12 @@ JobFit Simplify MVP is a small Streamlit app that helps students decide which Si
 
 The project intentionally avoids paid APIs, authentication, databases, and complex frontend work. It is built as a clean local MVP.
 
+## Live Links
+
+- Web app: https://jobfit-ebon.vercel.app
+- Backend API: https://jobfit-api-production.up.railway.app
+- API health check: https://jobfit-api-production.up.railway.app/api/health
+
 ## Features
 
 - Upload resumes as PDF, DOCX, or TXT.
@@ -80,6 +86,6 @@ web: uvicorn backend_api:app --host 0.0.0.0 --port $PORT
 The Next.js frontend should be deployed from the `frontend/` directory and configured with:
 
 ```bash
-NEXT_PUBLIC_JOBFIT_API_URL=https://your-backend-url
+NEXT_PUBLIC_JOBFIT_API_URL=https://jobfit-api-production.up.railway.app
 ```
 
