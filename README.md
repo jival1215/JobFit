@@ -71,6 +71,17 @@ You can paste another compatible SimplifyJobs raw README URL in the sidebar, suc
 
 ## Deployment
 
+### AWS
+
+This repo is now prepared to host both sides on AWS:
+
+- Frontend: AWS Amplify Hosting using `amplify.yml`.
+- Backend: AWS App Runner using the root `Dockerfile` and `requirements-api.txt`.
+
+See `docs/aws-deployment.md` for the full AWS migration checklist.
+
+### Other Hosts
+
 The FastAPI backend lives in `backend_api.py`. For deployment hosts that auto-detect `app.py`, this repo now includes a tiny `app.py` shim that exposes `backend_api.app`. The legacy Streamlit UI is preserved as `streamlit_app.py`. You can still set the backend start command explicitly:
 
 ```bash

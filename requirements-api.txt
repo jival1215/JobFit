@@ -1,0 +1,9 @@
+pandas
+scikit-learn
+requests
+beautifulsoup4
+PyPDF2
+python-docx
+fastapi
+uvicorn[standard]
+python-multipart

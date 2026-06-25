@@ -1,0 +1,14 @@
+.git/
+__pycache__/
+*.pyc
+.venv/
+.env
+.DS_Store
+.streamlit_home/
+saved_jobs.csv
+seen_jobs.csv
+frontend/
+tests/
+*.md
+.vercel/
+.railwayignore
