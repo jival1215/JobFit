@@ -146,7 +146,7 @@ export default function AboutPage() {
         </div>
       </div>
 
-      <div className="mt-10 grid gap-6 lg:grid-cols-[1.05fr_.95fr]">
+      <div className="mt-10">
         <div className="rounded-3xl border border-line bg-white p-8 shadow-sm">
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-violet-700">Gemini sorting technique</p>
           <h2 className="mt-3 text-2xl font-black text-ink">AI reranking without losing transparency</h2>
@@ -159,17 +159,6 @@ export default function AboutPage() {
                 <p>{item}</p>
               </div>
             ))}
-          </div>
-        </div>
-
-        <div className="rounded-3xl bg-ink p-8 text-white shadow-soft">
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-300">Why recruiters should care</p>
-          <h2 className="mt-3 text-2xl font-black">Built like a real product, not a demo screen.</h2>
-          <div className="mt-6 space-y-4 text-sm leading-6 text-white/74">
-            <p>It connects a modern frontend to a working Python backend, real public job sources, resume parsing, scoring, filtering, and deployment.</p>
-            <p>The AI layer is cost-aware: Gemini reviews the jobs most likely to matter instead of being called blindly for every row.</p>
-            <p>The matching is explainable: users can see score factors, matched skills, missing skills, AI reasoning, resume edits, and direct apply links.</p>
-            <p>The architecture is easy to extend into authentication, databases, saved searches, email alerts, or employer-specific ranking later.</p>
           </div>
         </div>
       </div>
