@@ -1,23 +1,31 @@
 import { ResumeRankForm } from "@/components/ResumeRankForm";
 
+const steps = ["Upload resume", "Pick job source", "Review ranked matches"];
+
 export default function UploadPage() {
   return (
-    <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-      <div className="grid gap-10 lg:grid-cols-[.9fr_1.1fr] lg:items-center">
-        <div>
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Resume upload</p>
-          <h1 className="mt-4 text-4xl font-black tracking-tight text-ink sm:text-6xl">
-            Start with the resume recruiters will scan.
+    <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+      <div className="mb-8 flex flex-col gap-6 rounded-3xl border border-line bg-white p-6 shadow-sm sm:p-8 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-2xl">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-600">Resume upload</p>
+          <h1 className="mt-3 text-3xl font-black tracking-tight text-ink sm:text-5xl">
+            Find your best-fit roles.
           </h1>
-          <p className="mt-5 text-lg leading-8 text-slateSoft">
-            This page sends your resume to the JobFIT Python backend, extracts the text, refreshes SimplifyJobs, and returns ranked matches.
+          <p className="mt-4 text-base leading-7 text-slateSoft sm:text-lg">
+            Upload a resume, choose the job pool, and JobFIT will rank real postings by fit, skills, freshness, and recruiter-style signals.
           </p>
-          <div className="mt-8 grid gap-3 text-sm text-slate-600">
-            <div className="rounded-2xl border border-line bg-white p-4">PDF, DOCX, and TXT ready</div>
-            <div className="rounded-2xl border border-line bg-white p-4">Source selection for internships and new grad roles</div>
-            <div className="rounded-2xl border border-line bg-white p-4">Connected to the AWS FastAPI backend</div>
-          </div>
         </div>
+        <div className="grid gap-2 text-sm font-semibold text-slate-600 sm:grid-cols-3 lg:min-w-[420px]">
+          {steps.map((step, index) => (
+            <div key={step} className="rounded-2xl border border-line bg-cloud px-4 py-3">
+              <span className="mr-2 text-brand-600">0{index + 1}</span>
+              {step}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-4xl">
         <ResumeRankForm />
       </div>
     </section>
