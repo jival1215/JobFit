@@ -63,6 +63,7 @@ def _cors_origins() -> list[str]:
         "http://localhost:3000",
         "https://jobfit-ebon.vercel.app",
         "https://jobfit-q3g08x4sn-jp-projects2.vercel.app",
+        "https://main.d8rnzmcb1hxs.amplifyapp.com",
     ]
     configured = [
         origin.strip()
