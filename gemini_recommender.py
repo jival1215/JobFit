@@ -29,7 +29,7 @@ def _as_list(value: Any, limit: int = 6) -> list[str]:
     return cleaned[:limit]
 
 
-def _resume_excerpt(resume_text: str, max_chars: int = 4500) -> str:
+def _resume_excerpt(resume_text: str, max_chars: int = 2200) -> str:
     text = re.sub(r"\s+", " ", resume_text).strip()
     if len(text) <= max_chars:
         return text
@@ -106,10 +106,10 @@ def _build_prompt(row: pd.Series, resume_text: str) -> str:
 You are a concise career coach for an early-career CS student. Improve only the recommendation text for this job match.
 
 Rules:
+- Be brief. Prioritize speed and useful recruiter-style advice.
 - Do not change the match score, recommendation, company, title, or skills.
 - Do not invent experience, employers, metrics, certifications, or projects.
 - Resume keywords must be suggested only if truthful.
-- Keep advice practical, recruiter-style, and specific to this job.
 - Return only valid JSON. No markdown.
 
 Resume excerpt:
@@ -121,8 +121,8 @@ Job match data:
 Return this JSON shape:
 {{
   "personalizedSummary": "1 short sentence explaining the fit",
-  "matchExplanation": "2-3 sentences explaining why this job fits the resume and what to watch out for",
-  "improvementTips": ["specific application/resume tip", "specific application/resume tip"],
+  "matchExplanation": "1-2 short sentences explaining the fit and main gap",
+  "improvementTips": ["specific application/resume tip"],
   "resumeKeywords": ["keyword to add if truthful"],
   "suggestedExperience": ["project or experience to highlight"],
   "resumeBulletChanges": [
@@ -198,7 +198,21 @@ def _recommendation_schema() -> dict[str, Any]:
     }
 
 
-def _generate_json(prompt: str, schema: dict[str, Any], timeout: int = 20) -> dict[str, Any]:
+def _gemini_timeout(default: int = 8) -> int:
+    try:
+        return max(3, int(os.getenv("GEMINI_TIMEOUT_SECONDS", str(default)) or default))
+    except ValueError:
+        return default
+
+
+def _gemini_max_tokens(default: int = 1200) -> int:
+    try:
+        return max(256, int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", str(default)) or default))
+    except ValueError:
+        return default
+
+
+def _generate_json(prompt: str, schema: dict[str, Any], timeout: int | None = None) -> dict[str, Any]:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
         return {}
@@ -211,13 +225,13 @@ def _generate_json(prompt: str, schema: dict[str, Any], timeout: int = 20) -> di
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
                 "temperature": 0.2,
-                "maxOutputTokens": 4096,
+                "maxOutputTokens": _gemini_max_tokens(),
                 "responseMimeType": "application/json",
                 "thinkingConfig": {"thinkingBudget": 0},
                 "responseSchema": schema,
             },
         },
-        timeout=timeout,
+        timeout=timeout or _gemini_timeout(),
     )
     response.raise_for_status()
     data = response.json()
@@ -225,7 +239,7 @@ def _generate_json(prompt: str, schema: dict[str, Any], timeout: int = 20) -> di
     return _safe_json_loads(text)
 
 
-def get_gemini_recommendations(row: pd.Series, resume_text: str, timeout: int = 20) -> dict[str, Any]:
+def get_gemini_recommendations(row: pd.Series, resume_text: str, timeout: int | None = None) -> dict[str, Any]:
     if not os.getenv("GEMINI_API_KEY", "").strip():
         return {}
     payload = _generate_json(_build_prompt(row, resume_text), _recommendation_schema(), timeout=timeout)
@@ -288,7 +302,7 @@ def _sanitize_agent_score(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def get_recruiter_relatedness(row: pd.Series, resume_text: str, timeout: int = 20) -> dict[str, Any]:
+def get_recruiter_relatedness(row: pd.Series, resume_text: str, timeout: int | None = None) -> dict[str, Any]:
     if not os.getenv("GEMINI_API_KEY", "").strip():
         return {}
     payload = _generate_json(_build_recruiter_relatedness_prompt(row, resume_text), _score_schema(), timeout=timeout)
@@ -302,9 +316,9 @@ def _final_score(base_score: float, agent_score: float, ai_weight: float) -> flo
 def rerank_top_matches_with_recruiter_agent(
     ranked: pd.DataFrame,
     resume_text: str,
-    target_size: int = 10,
+    target_size: int = 5,
     batch_size: int = 5,
-    max_candidates: int = 25,
+    max_candidates: int = 5,
     ai_weight: float = 0.20,
 ) -> pd.DataFrame:
     if not gemini_enabled() or ranked.empty or target_size <= 0:
@@ -363,7 +377,7 @@ def rerank_top_matches_with_recruiter_agent(
     return reranked.sort_values("match_score", ascending=False).reset_index(drop=True)
 
 
-def enrich_ranked_with_gemini(ranked: pd.DataFrame, resume_text: str, limit: int = 5) -> pd.DataFrame:
+def enrich_ranked_with_gemini(ranked: pd.DataFrame, resume_text: str, limit: int = 2) -> pd.DataFrame:
     if not gemini_enabled() or ranked.empty or limit <= 0:
         return ranked
 

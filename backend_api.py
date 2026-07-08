@@ -431,15 +431,15 @@ async def rank_resume(
         ranked = rerank_top_matches_with_recruiter_agent(
             ranked,
             resume_text,
-            target_size=int(os.getenv("GEMINI_RECRUITER_TARGET_SIZE", "10") or 10),
+            target_size=int(os.getenv("GEMINI_RECRUITER_TARGET_SIZE", "5") or 5),
             batch_size=int(os.getenv("GEMINI_RECRUITER_BATCH_SIZE", "5") or 5),
-            max_candidates=int(os.getenv("GEMINI_RECRUITER_MAX_CANDIDATES", "25") or 25),
+            max_candidates=int(os.getenv("GEMINI_RECRUITER_MAX_CANDIDATES", "5") or 5),
             ai_weight=float(os.getenv("GEMINI_RECRUITER_SCORE_WEIGHT", "0.20") or 0.20),
         )
         ranked = enrich_ranked_with_gemini(
             ranked,
             resume_text,
-            int(os.getenv("GEMINI_RECOMMENDATION_LIMIT", "5") or 5),
+            int(os.getenv("GEMINI_RECOMMENDATION_LIMIT", "2") or 2),
         )
     if not user:
         ranked = merge_statuses(ranked, load_statuses())
