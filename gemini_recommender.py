@@ -9,7 +9,7 @@ import pandas as pd
 import requests
 
 
-DEFAULT_MODEL = "gemini-1.5-flash"
+DEFAULT_MODEL = "gemini-2.5-flash"
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 
@@ -147,8 +147,48 @@ def get_gemini_recommendations(row: pd.Series, resume_text: str, timeout: int = 
         "contents": [{"parts": [{"text": _build_prompt(row, resume_text)}]}],
         "generationConfig": {
             "temperature": 0.2,
-            "maxOutputTokens": 1200,
+            "maxOutputTokens": 4096,
             "responseMimeType": "application/json",
+            "thinkingConfig": {"thinkingBudget": 0},
+            "responseSchema": {
+                "type": "OBJECT",
+                "properties": {
+                    "personalizedSummary": {"type": "STRING"},
+                    "matchExplanation": {"type": "STRING"},
+                    "improvementTips": {
+                        "type": "ARRAY",
+                        "items": {"type": "STRING"},
+                    },
+                    "resumeKeywords": {
+                        "type": "ARRAY",
+                        "items": {"type": "STRING"},
+                    },
+                    "suggestedExperience": {
+                        "type": "ARRAY",
+                        "items": {"type": "STRING"},
+                    },
+                    "resumeBulletChanges": {
+                        "type": "ARRAY",
+                        "items": {
+                            "type": "OBJECT",
+                            "properties": {
+                                "current": {"type": "STRING"},
+                                "suggestion": {"type": "STRING"},
+                                "reason": {"type": "STRING"},
+                            },
+                            "required": ["current", "suggestion", "reason"],
+                        },
+                    },
+                },
+                "required": [
+                    "personalizedSummary",
+                    "matchExplanation",
+                    "improvementTips",
+                    "resumeKeywords",
+                    "suggestedExperience",
+                    "resumeBulletChanges",
+                ],
+            },
         },
     }
     response = requests.post(

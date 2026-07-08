@@ -17,7 +17,7 @@ This repo is prepared for a two-service AWS deployment:
 PORT=8080
 FRONTEND_ORIGINS=https://YOUR_AMPLIFY_DOMAIN.amplifyapp.com
 ENABLE_GEMINI_RECOMMENDATIONS=false
-GEMINI_MODEL=gemini-1.5-flash
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 To enable Gemini recommendation text, add your Google AI Studio key and set `ENABLE_GEMINI_RECOMMENDATIONS=true`:
