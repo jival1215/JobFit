@@ -1,9 +1,11 @@
 # AWS Deployment Guide
 
-This repo is prepared for a two-service AWS deployment:
+This repo is prepared for a staged AWS deployment:
 
 - Frontend: AWS Amplify Hosting from the `frontend/` app.
 - Backend: AWS App Runner from the root `Dockerfile`.
+- Local development database: SQLite via `jobfit_db.py`.
+- Production database target: Amazon RDS PostgreSQL plus Cognito once we wire the production auth layer.
 
 ## Backend: AWS App Runner
 
@@ -16,7 +18,7 @@ This repo is prepared for a two-service AWS deployment:
 ```bash
 PORT=8080
 FRONTEND_ORIGINS=https://YOUR_AMPLIFY_DOMAIN.amplifyapp.com
-ENABLE_GEMINI_RECOMMENDATIONS=false
+ENABLE_GEMINI_RECOMMENDATIONS=true
 GEMINI_MODEL=gemini-2.5-flash
 GEMINI_RECOMMENDATION_LIMIT=5
 GEMINI_RECRUITER_TARGET_SIZE=10
@@ -36,13 +38,14 @@ Optional for Amplify preview branches:
 FRONTEND_ORIGIN_REGEX=https://.*\.amplifyapp\.com
 ```
 
-6. Deploy and copy the App Runner service URL. It will look like:
+6. For the current local-account version, App Runner will use its container filesystem for SQLite if `JOBFIT_DB_PATH` is not set. This is acceptable only for a first smoke test because App Runner storage is not durable across redeploys. For real user accounts, create RDS PostgreSQL before making this public.
+7. Deploy and copy the App Runner service URL. It will look like:
 
 ```text
 https://xxxxxxxx.us-east-1.awsapprunner.com
 ```
 
-7. Confirm the backend works:
+8. Confirm the backend works:
 
 ```bash
 curl https://YOUR_APP_RUNNER_URL/api/health
@@ -79,6 +82,16 @@ docker run --rm -p 8080:8080 -e PORT=8080 jobfit-api
 curl http://127.0.0.1:8080/api/health
 ```
 
+## Production Database Next Step
+
+The local account system uses SQLite so we can build quickly. Before using real users in AWS, move persistence to RDS PostgreSQL:
+
+1. Create an RDS PostgreSQL instance in the same region as App Runner.
+2. Store the database URL in AWS Secrets Manager or App Runner environment variables.
+3. Replace the SQLite adapter in `jobfit_db.py` with the PostgreSQL adapter.
+4. Keep auth temporary for local testing, or switch auth to Cognito for production login.
+5. Redeploy App Runner and verify `/api/auth/register`, `/api/auth/login`, `/api/saved-matches`, and `/api/rank`.
+
 ## Notes
 
-The backend still uses local CSV files for saved/seen job state. On App Runner, local files are ephemeral, so status tracking is not durable across redeploys. For production durability, move saved/applied/skipped jobs to DynamoDB, RDS, or S3.
+Do not commit API keys or database passwords. Use App Runner environment variables, Secrets Manager, or SSM Parameter Store for `GEMINI_API_KEY` and database credentials.
