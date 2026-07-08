@@ -12,7 +12,7 @@ import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from gemini_recommender import enrich_ranked_with_gemini, gemini_enabled
+from gemini_recommender import enrich_ranked_with_gemini, gemini_enabled, rerank_top_matches_with_recruiter_agent
 from job_scout import mark_new_jobs
 from matcher import rank_jobs
 from resume_utils import extract_resume_text
@@ -59,6 +59,21 @@ class UploadedResume:
 
 def _split_skills(value: Any) -> list[str]:
     return [item.strip() for item in str(value or "").split(",") if item.strip()]
+
+
+def _split_json_or_csv(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value or "").strip()
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return _split_skills(text)
+    if isinstance(parsed, list):
+        return [str(item).strip() for item in parsed if str(item).strip()]
+    return _split_skills(text)
 
 
 def _job_type(source: str) -> str:
@@ -226,12 +241,18 @@ def _records_from_ranked(ranked: pd.DataFrame, resume_text: str = "") -> list[di
                 "location": str(row.get("location", "")),
                 "type": _job_type(str(row.get("source", ""))),
                 "score": float(row.get("match_score", 0) or 0),
+                "deterministicScore": float(row.get("deterministic_match_score", row.get("match_score", 0)) or 0),
                 "recommendation": str(row.get("recommendation", "")),
                 "source": str(row.get("source", "")),
                 "posted": str(row.get("age", "")) or "Unknown",
                 "applicationLink": str(row.get("application_link", "")),
                 "applyUrl": str(row.get("application_link", "")),
                 "matchScore": float(row.get("match_score", 0) or 0),
+                "aiRecruiterRelatednessScore": float(row.get("ai_recruiter_relatedness_score", 0) or 0),
+                "aiRecruiterReasoning": str(row.get("ai_recruiter_reasoning", "")),
+                "aiRecruiterEvidence": _split_json_or_csv(row.get("ai_recruiter_evidence", "")),
+                "aiRecruiterConcerns": _split_json_or_csv(row.get("ai_recruiter_concerns", "")),
+                "aiRecruiterProvider": str(row.get("ai_recruiter_provider", "")),
                 "matchedSkills": _split_skills(row.get("matched_skills", "")),
                 "missingSkills": _split_skills(row.get("missing_skills", "")),
                 "summary": personalized_summary,
@@ -309,7 +330,16 @@ async def rank_resume(
     jobs["source"] = source
     jobs = mark_new_jobs(jobs, source)
     ranked = rank_jobs(resume_text, jobs, role_values, location_values)
-    if use_ai_recommendations and gemini_enabled():
+    ai_recruiter_rerank_enabled = bool(use_ai_recommendations and gemini_enabled())
+    if ai_recruiter_rerank_enabled:
+        ranked = rerank_top_matches_with_recruiter_agent(
+            ranked,
+            resume_text,
+            target_size=int(os.getenv("GEMINI_RECRUITER_TARGET_SIZE", "10") or 10),
+            batch_size=int(os.getenv("GEMINI_RECRUITER_BATCH_SIZE", "5") or 5),
+            max_candidates=int(os.getenv("GEMINI_RECRUITER_MAX_CANDIDATES", "25") or 25),
+            ai_weight=float(os.getenv("GEMINI_RECRUITER_SCORE_WEIGHT", "0.20") or 0.20),
+        )
         ranked = enrich_ranked_with_gemini(
             ranked,
             resume_text,
@@ -327,6 +357,8 @@ async def rank_resume(
         "newCount": int(ranked.get("is_new", pd.Series(False, index=ranked.index)).sum()),
         "aiRecommendationsRequested": bool(use_ai_recommendations),
         "aiRecommendationsEnabled": bool(use_ai_recommendations and gemini_enabled()),
+        "aiRecruiterRerankEnabled": ai_recruiter_rerank_enabled,
+        "aiRecruiterReviewedCount": int(ranked.get("ai_recruiter_relatedness_score", pd.Series(dtype=float)).notna().sum()) if "ai_recruiter_relatedness_score" in ranked else 0,
         "aiEnhancedCount": sum(1 for job in records if job.get("aiEnhanced")),
         "jobs": records,
         "tracker": tracker_summary(load_statuses()),

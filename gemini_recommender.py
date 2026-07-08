@@ -136,71 +136,231 @@ Return this JSON shape:
 """.strip()
 
 
-def get_gemini_recommendations(row: pd.Series, resume_text: str, timeout: int = 20) -> dict[str, Any]:
+
+def _score_schema() -> dict[str, Any]:
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "recruiterRelatednessScore": {"type": "NUMBER"},
+            "reasoning": {"type": "STRING"},
+            "relatedEvidence": {
+                "type": "ARRAY",
+                "items": {"type": "STRING"},
+            },
+            "concerns": {
+                "type": "ARRAY",
+                "items": {"type": "STRING"},
+            },
+        },
+        "required": ["recruiterRelatednessScore", "reasoning", "relatedEvidence", "concerns"],
+    }
+
+
+def _recommendation_schema() -> dict[str, Any]:
+    return {
+        "type": "OBJECT",
+        "properties": {
+            "personalizedSummary": {"type": "STRING"},
+            "matchExplanation": {"type": "STRING"},
+            "improvementTips": {
+                "type": "ARRAY",
+                "items": {"type": "STRING"},
+            },
+            "resumeKeywords": {
+                "type": "ARRAY",
+                "items": {"type": "STRING"},
+            },
+            "suggestedExperience": {
+                "type": "ARRAY",
+                "items": {"type": "STRING"},
+            },
+            "resumeBulletChanges": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "current": {"type": "STRING"},
+                        "suggestion": {"type": "STRING"},
+                        "reason": {"type": "STRING"},
+                    },
+                    "required": ["current", "suggestion", "reason"],
+                },
+            },
+        },
+        "required": [
+            "personalizedSummary",
+            "matchExplanation",
+            "improvementTips",
+            "resumeKeywords",
+            "suggestedExperience",
+            "resumeBulletChanges",
+        ],
+    }
+
+
+def _generate_json(prompt: str, schema: dict[str, Any], timeout: int = 20) -> dict[str, Any]:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
         return {}
 
     model = os.getenv("GEMINI_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
-    url = GEMINI_ENDPOINT.format(model=model)
-    payload = {
-        "contents": [{"parts": [{"text": _build_prompt(row, resume_text)}]}],
-        "generationConfig": {
-            "temperature": 0.2,
-            "maxOutputTokens": 4096,
-            "responseMimeType": "application/json",
-            "thinkingConfig": {"thinkingBudget": 0},
-            "responseSchema": {
-                "type": "OBJECT",
-                "properties": {
-                    "personalizedSummary": {"type": "STRING"},
-                    "matchExplanation": {"type": "STRING"},
-                    "improvementTips": {
-                        "type": "ARRAY",
-                        "items": {"type": "STRING"},
-                    },
-                    "resumeKeywords": {
-                        "type": "ARRAY",
-                        "items": {"type": "STRING"},
-                    },
-                    "suggestedExperience": {
-                        "type": "ARRAY",
-                        "items": {"type": "STRING"},
-                    },
-                    "resumeBulletChanges": {
-                        "type": "ARRAY",
-                        "items": {
-                            "type": "OBJECT",
-                            "properties": {
-                                "current": {"type": "STRING"},
-                                "suggestion": {"type": "STRING"},
-                                "reason": {"type": "STRING"},
-                            },
-                            "required": ["current", "suggestion", "reason"],
-                        },
-                    },
-                },
-                "required": [
-                    "personalizedSummary",
-                    "matchExplanation",
-                    "improvementTips",
-                    "resumeKeywords",
-                    "suggestedExperience",
-                    "resumeBulletChanges",
-                ],
+    response = requests.post(
+        GEMINI_ENDPOINT.format(model=model),
+        params={"key": api_key},
+        json={
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 4096,
+                "responseMimeType": "application/json",
+                "thinkingConfig": {"thinkingBudget": 0},
+                "responseSchema": schema,
             },
         },
-    }
-    response = requests.post(
-        url,
-        params={"key": api_key},
-        json=payload,
         timeout=timeout,
     )
     response.raise_for_status()
     data = response.json()
     text = data["candidates"][0]["content"]["parts"][0]["text"]
-    return _sanitize_recommendations(_safe_json_loads(text))
+    return _safe_json_loads(text)
+
+
+def get_gemini_recommendations(row: pd.Series, resume_text: str, timeout: int = 20) -> dict[str, Any]:
+    if not os.getenv("GEMINI_API_KEY", "").strip():
+        return {}
+    payload = _generate_json(_build_prompt(row, resume_text), _recommendation_schema(), timeout=timeout)
+    return _sanitize_recommendations(payload)
+
+
+
+def _build_recruiter_relatedness_prompt(row: pd.Series, resume_text: str) -> str:
+    job = {
+        "company": str(row.get("company", "")),
+        "title": str(row.get("role", "")),
+        "location": str(row.get("location", "")),
+        "category": str(row.get("category", "")),
+        "source": str(row.get("source", "")),
+        "posted": str(row.get("age", "")),
+        "deterministicMatchScore": float(row.get("match_score", 0) or 0),
+        "matchedSkills": _as_list(row.get("matched_skills", ""), 12),
+        "missingSkills": _as_list(row.get("missing_skills", ""), 12),
+        "scoreBreakdown": str(row.get("score_breakdown", "")),
+    }
+    return f"""
+You are acting as an experienced university recruiter reviewing an early-career candidate's resume against one job.
+
+Task:
+Score recruiter-style relatedness from 0 to 100. This is NOT exact keyword matching. Judge whether a recruiter would reasonably connect the candidate's projects, tools, domain exposure, and role interests to this job.
+
+Rules:
+- Do not invent experience or assume skills not shown in the resume/job data.
+- Reward adjacent evidence: related projects, transferable tools, relevant domain context, and plausible intern-level fit.
+- Penalize major gaps: unrelated domain, senior scope, missing core required stack, hardware/lab mismatch, or location mismatch if meaningful.
+- Keep reasoning concise and specific.
+- Return only valid JSON.
+
+Resume excerpt:
+{_resume_excerpt(resume_text)}
+
+Job match data:
+{json.dumps(job, ensure_ascii=True)}
+
+Return JSON:
+{{
+  "recruiterRelatednessScore": 0,
+  "reasoning": "why a recruiter would or would not connect this resume to this job",
+  "relatedEvidence": ["resume evidence connected to the role"],
+  "concerns": ["gap or risk"]
+}}
+""".strip()
+
+
+def _sanitize_agent_score(payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        score = float(payload.get("recruiterRelatednessScore", 0))
+    except (TypeError, ValueError):
+        score = 0.0
+    return {
+        "recruiterRelatednessScore": round(max(0.0, min(100.0, score)), 1),
+        "recruiterRelatednessReasoning": str(payload.get("reasoning", "")).strip(),
+        "recruiterRelatedEvidence": _as_list(payload.get("relatedEvidence"), 6),
+        "recruiterRelatedConcerns": _as_list(payload.get("concerns"), 6),
+    }
+
+
+def get_recruiter_relatedness(row: pd.Series, resume_text: str, timeout: int = 20) -> dict[str, Any]:
+    if not os.getenv("GEMINI_API_KEY", "").strip():
+        return {}
+    payload = _generate_json(_build_recruiter_relatedness_prompt(row, resume_text), _score_schema(), timeout=timeout)
+    return _sanitize_agent_score(payload)
+
+
+def _final_score(base_score: float, agent_score: float, ai_weight: float) -> float:
+    return round(((1.0 - ai_weight) * float(base_score)) + (ai_weight * float(agent_score)), 1)
+
+
+def rerank_top_matches_with_recruiter_agent(
+    ranked: pd.DataFrame,
+    resume_text: str,
+    target_size: int = 10,
+    batch_size: int = 5,
+    max_candidates: int = 25,
+    ai_weight: float = 0.20,
+) -> pd.DataFrame:
+    if not gemini_enabled() or ranked.empty or target_size <= 0:
+        return ranked
+
+    ai_weight = max(0.0, min(0.5, float(ai_weight)))
+    target_size = min(target_size, len(ranked))
+    max_candidates = max(target_size, min(max_candidates, len(ranked)))
+    batch_size = max(1, batch_size)
+    reranked = ranked.copy().reset_index(drop=True)
+    reranked["match_score"] = reranked["match_score"].astype(float)
+    reranked["deterministic_match_score"] = reranked["match_score"]
+    reviewed: set[int] = set()
+
+    def review_until(count: int) -> None:
+        for idx in range(min(count, len(reranked))):
+            if idx in reviewed:
+                continue
+            reviewed.add(idx)
+            row = reranked.loc[idx]
+            try:
+                result = get_recruiter_relatedness(row, resume_text)
+            except Exception as exc:
+                reranked.at[idx, "ai_recruiter_error"] = str(exc)
+                continue
+            if not result:
+                continue
+            agent_score = float(result["recruiterRelatednessScore"])
+            base_score = float(row.get("deterministic_match_score", row.get("match_score", 0)) or 0)
+            reranked.at[idx, "ai_recruiter_relatedness_score"] = agent_score
+            reranked.at[idx, "ai_recruiter_reasoning"] = result["recruiterRelatednessReasoning"]
+            reranked.at[idx, "ai_recruiter_evidence"] = json.dumps(result["recruiterRelatedEvidence"])
+            reranked.at[idx, "ai_recruiter_concerns"] = json.dumps(result["recruiterRelatedConcerns"])
+            reranked.at[idx, "ai_recruiter_provider"] = "Gemini"
+            reranked.at[idx, "match_score"] = _final_score(base_score, agent_score, ai_weight)
+
+    reviewed_count = 0
+    while True:
+        reviewed_count = min(max_candidates, max(target_size, reviewed_count + batch_size))
+        review_until(reviewed_count)
+        reviewed_frame = reranked.loc[sorted(reviewed)].copy()
+        if len(reviewed_frame) < target_size:
+            if reviewed_count >= max_candidates:
+                break
+            continue
+        cutoff = float(reviewed_frame.sort_values("match_score", ascending=False).iloc[target_size - 1]["match_score"])
+        next_idx = reviewed_count
+        if next_idx >= max_candidates or next_idx >= len(reranked):
+            break
+        next_base = float(reranked.loc[next_idx].get("deterministic_match_score", reranked.loc[next_idx].get("match_score", 0)) or 0)
+        next_best_case = _final_score(next_base, 100.0, ai_weight)
+        if next_best_case <= cutoff:
+            break
+
+    reranked["recommendation"] = reranked["match_score"].apply(lambda score: "Apply" if score >= 78 else "Maybe apply" if score >= 58 else "Skip")
+    return reranked.sort_values("match_score", ascending=False).reset_index(drop=True)
 
 
 def enrich_ranked_with_gemini(ranked: pd.DataFrame, resume_text: str, limit: int = 5) -> pd.DataFrame:

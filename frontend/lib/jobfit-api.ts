@@ -8,6 +8,8 @@ export type RankResponse = {
   newCount: number;
   aiRecommendationsRequested?: boolean;
   aiRecommendationsEnabled?: boolean;
+  aiRecruiterRerankEnabled?: boolean;
+  aiRecruiterReviewedCount?: number;
   aiEnhancedCount?: number;
   jobs: JobMatch[];
   tracker?: Record<string, number>;

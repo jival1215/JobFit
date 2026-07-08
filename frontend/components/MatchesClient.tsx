@@ -59,7 +59,7 @@ export function MatchesClient({ fallbackJobs }: MatchesClientProps) {
                 : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
             }`}>
               {ranked.aiRecommendationsEnabled
-                ? `Gemini enhanced recommendation text for ${ranked.aiEnhancedCount ?? 0} top matches`
+                ? `Gemini reviewed ${ranked.aiRecruiterReviewedCount ?? 0} candidates and enhanced recommendation text for ${ranked.aiEnhancedCount ?? 0} top matches`
                 : "Gemini was requested, but the backend API key is not enabled"}
             </p>
           ) : null}

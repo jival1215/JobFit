@@ -34,6 +34,15 @@ export function JobMatchCard({ job }: { job: JobMatch }) {
         {job.personalizedSummary || job.summary || "Open feedback to see why this job matched your resume."}
       </p>
 
+      {job.aiRecruiterRelatednessScore ? (
+        <div className="relative z-10 mt-4 rounded-2xl bg-violet-50 p-4 text-sm leading-6 text-violet-900 ring-1 ring-violet-100">
+          <p className="font-black">Recruiter relatedness: {job.aiRecruiterRelatednessScore}/100</p>
+          {job.deterministicScore ? (
+            <p className="mt-1 text-violet-700">Original score: {job.deterministicScore.toFixed(1)} · AI-adjusted score: {(job.matchScore ?? job.score).toFixed(1)}</p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="relative z-10 mt-5 grid gap-4 sm:grid-cols-2">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Matched</p>

@@ -102,9 +102,9 @@ export function ResumeRankForm() {
           className="mt-1 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500"
         />
         <span>
-          <span className="block text-sm font-bold text-ink">Use Gemini for recommendation text</span>
+          <span className="block text-sm font-bold text-ink">Use Gemini recruiter review</span>
           <span className="mt-1 block text-sm leading-6 text-slateSoft">
-            Keeps the same match ranking, then uses Gemini only for resume tips and job feedback when the backend API key is configured.
+            Starts with the normal match score, then lets Gemini review the strongest candidates for recruiter-style relatedness and resume feedback.
           </span>
         </span>
       </label>
@@ -114,7 +114,7 @@ export function ResumeRankForm() {
         disabled={isLoading}
         className="mt-6 flex w-full justify-center rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isLoading ? "Ranking with backend..." : useAiRecommendations ? "Generate matches + Gemini recommendations" : "Generate real matches"}
+        {isLoading ? "Ranking with backend..." : useAiRecommendations ? "Generate matches + Gemini recruiter review" : "Generate real matches"}
       </button>
       <Link href="/matches" className="mt-3 flex w-full justify-center text-sm font-semibold text-brand-600 hover:text-brand-700">
         View mock matches instead

@@ -126,6 +126,43 @@ export function MatchDetailsClient({ id, fallbackJobs }: { id: string; fallbackJ
       <div className="mt-8 grid gap-8 lg:grid-cols-[1.15fr_.85fr]">
         <div className="space-y-8">
 
+
+          {job.aiRecruiterRelatednessScore ? (
+            <FeedbackSection title="AI recruiter relatedness review">
+              <div className="rounded-2xl bg-violet-50 p-5 text-sm leading-6 text-violet-950 ring-1 ring-violet-100">
+                <p className="text-lg font-black">{job.aiRecruiterRelatednessScore}/100 recruiter relatedness</p>
+                {job.deterministicScore ? (
+                  <p className="mt-2 text-violet-800">Original deterministic score: {job.deterministicScore.toFixed(1)} · AI-adjusted score: {(job.matchScore ?? job.score).toFixed(1)}</p>
+                ) : null}
+                {job.aiRecruiterReasoning ? <p className="mt-4">{job.aiRecruiterReasoning}</p> : null}
+              </div>
+              {job.aiRecruiterEvidence?.length ? (
+                <div className="mt-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Related evidence</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {job.aiRecruiterEvidence.map((item) => (
+                      <span key={item} className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700 ring-1 ring-emerald-200">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {job.aiRecruiterConcerns?.length ? (
+                <div className="mt-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Concerns</p>
+                  <div className="mt-2 space-y-2">
+                    {job.aiRecruiterConcerns.map((item) => (
+                      <p key={item} className="rounded-2xl bg-amber-50 p-3 text-sm leading-6 text-amber-800 ring-1 ring-amber-100">
+                        {item}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </FeedbackSection>
+          ) : null}
+
           <FeedbackSection title={job.aiEnhanced ? "Resume bullets to rewrite with Gemini" : "Resume bullets to rewrite"}>
             {resumeBulletChanges.length ? (
               <div className="space-y-4">

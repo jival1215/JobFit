@@ -24,7 +24,7 @@ The project intentionally avoids paid APIs, authentication, databases, and compl
 - Filter by role, location, company, and minimum score.
 - Export ranked results to CSV.
 - Save local job statuses: Saved, Applied, Skipped.
-- Optional Gemini-enhanced recommendation text for top ranked jobs.
+- Optional Gemini recruiter review that reranks the strongest candidates and enhances recommendation text.
 
 ## Setup
 
@@ -108,5 +108,8 @@ GEMINI_API_KEY=your_key_here
 GEMINI_MODEL=gemini-2.5-flash
 ENABLE_GEMINI_RECOMMENDATIONS=true
 GEMINI_RECOMMENDATION_LIMIT=5
+GEMINI_RECRUITER_TARGET_SIZE=10
+GEMINI_RECRUITER_MAX_CANDIDATES=25
+GEMINI_RECRUITER_SCORE_WEIGHT=0.20
 ```
 

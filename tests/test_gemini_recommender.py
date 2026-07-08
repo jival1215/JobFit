@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from gemini_recommender import enrich_ranked_with_gemini, gemini_enabled, get_gemini_recommendations
+from gemini_recommender import enrich_ranked_with_gemini, gemini_enabled, get_gemini_recommendations, rerank_top_matches_with_recruiter_agent
 
 
 class GeminiRecommenderTests(unittest.TestCase):
@@ -89,6 +89,48 @@ class GeminiRecommenderTests(unittest.TestCase):
         self.assertEqual(recommendations["personalizedSummary"], "Strong analytics fit.")
         self.assertEqual(recommendations["resumeKeywords"], ["SQL", "dashboards"])
         self.assertEqual(recommendations["resumeBulletChanges"][0]["current"], "Built a Python SQL dashboard.")
+
+    @patch("gemini_recommender.get_recruiter_relatedness")
+    def test_recruiter_agent_reviews_next_candidate_when_it_can_enter_top_10(self, mocked_relatedness):
+        os.environ["ENABLE_GEMINI_RECOMMENDATIONS"] = "true"
+        os.environ["GEMINI_API_KEY"] = "test-key"
+        rows = []
+        for index in range(11):
+            rows.append(
+                {
+                    "company": f"Company {index}",
+                    "role": f"AI Data Intern {index}",
+                    "location": "Remote",
+                    "match_score": 95 - index,
+                    "recommendation": "Apply",
+                    "matched_skills": "Python, SQL",
+                    "missing_skills": "AWS",
+                }
+            )
+        ranked = pd.DataFrame(rows)
+
+        def score_for(row, resume_text):
+            company = str(row.get("company", ""))
+            score = 100 if company == "Company 10" else 70
+            return {
+                "recruiterRelatednessScore": score,
+                "recruiterRelatednessReasoning": f"Score {score}",
+                "recruiterRelatedEvidence": ["Python"],
+                "recruiterRelatedConcerns": [],
+            }
+
+        mocked_relatedness.side_effect = score_for
+        reranked = rerank_top_matches_with_recruiter_agent(
+            ranked,
+            "Python SQL AI resume",
+            target_size=10,
+            batch_size=10,
+            max_candidates=11,
+            ai_weight=0.20,
+        )
+
+        self.assertIn("Company 10", set(reranked.head(10)["company"]))
+        self.assertEqual(float(reranked.loc[reranked["company"] == "Company 10", "ai_recruiter_relatedness_score"].iloc[0]), 100.0)
 
 
 if __name__ == "__main__":

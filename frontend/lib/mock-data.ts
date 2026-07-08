@@ -13,6 +13,12 @@ export type JobMatch = {
   type: "Internship" | "Co-op" | "New Grad";
   score: number;
   matchScore?: number;
+  deterministicScore?: number;
+  aiRecruiterRelatednessScore?: number;
+  aiRecruiterReasoning?: string;
+  aiRecruiterEvidence?: string[];
+  aiRecruiterConcerns?: string[];
+  aiRecruiterProvider?: string;
   recommendation: "Apply" | "Maybe" | "Skip";
   source: string;
   posted: string;
