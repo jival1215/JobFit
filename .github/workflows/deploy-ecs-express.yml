@@ -2,6 +2,21 @@ name: Build and Deploy Backend to ECS Express Mode
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - backend_api.py
+      - gemini_recommender.py
+      - jobfit_db.py
+      - matcher.py
+      - simplify_fetcher.py
+      - skills.py
+      - resume_utils.py
+      - saved_jobs.py
+      - requirements*.txt
+      - Dockerfile
+      - .github/workflows/deploy-ecs-express.yml
 
 permissions:
   id-token: write
@@ -65,7 +80,7 @@ jobs:
           environment-variables: |
             [
               {"name":"PORT","value":"8080"},
-              {"name":"FRONTEND_ORIGINS","value":"${{ secrets.FRONTEND_ORIGINS }}"},
+              {"name":"FRONTEND_ORIGINS","value":"https://main.d8rnzmcb1hxs.amplifyapp.com,https://jobfit-ebon.vercel.app"},
               {"name":"FRONTEND_ORIGIN_REGEX","value":"https://.*\\.amplifyapp\\.com"},
               {"name":"ENABLE_GEMINI_RECOMMENDATIONS","value":"true"},
               {"name":"GEMINI_MODEL","value":"gemini-2.5-flash"},

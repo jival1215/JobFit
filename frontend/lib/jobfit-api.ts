@@ -25,7 +25,8 @@ export type RankResponse = {
   matchRunId?: number | null;
 };
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_JOBFIT_API_URL || "http://127.0.0.1:8000";
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_JOBFIT_API_URL || "https://jo-38a8bf22204d4ef3be83fbe102337105.ecs.us-east-2.on.aws";
 export const AUTH_TOKEN_KEY = "jobfit:auth-token";
 
 export function getAuthToken() {

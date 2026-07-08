@@ -10,12 +10,12 @@ export default function UploadPage() {
             Start with the resume recruiters will scan.
           </h1>
           <p className="mt-5 text-lg leading-8 text-slateSoft">
-            This page sends your resume to the local Python backend, extracts the text, refreshes SimplifyJobs, and returns ranked matches.
+            This page sends your resume to the JobFIT Python backend, extracts the text, refreshes SimplifyJobs, and returns ranked matches.
           </p>
           <div className="mt-8 grid gap-3 text-sm text-slate-600">
             <div className="rounded-2xl border border-line bg-white p-4">PDF, DOCX, and TXT ready</div>
             <div className="rounded-2xl border border-line bg-white p-4">Source selection for internships and new grad roles</div>
-            <div className="rounded-2xl border border-line bg-white p-4">Connected to the local FastAPI bridge</div>
+            <div className="rounded-2xl border border-line bg-white p-4">Connected to the AWS FastAPI backend</div>
           </div>
         </div>
         <ResumeRankForm />

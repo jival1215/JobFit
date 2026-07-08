@@ -15,7 +15,7 @@ export function UploadBox({ fileName, onFileChange }: UploadBoxProps) {
       </div>
       <h3 className="mt-5 text-lg font-semibold text-ink">Drop your resume here</h3>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slateSoft">
-        PDF, DOCX, or TXT. The file is sent to the local JobFIT Python API for extraction and matching.
+        PDF, DOCX, or TXT. The file is sent to the JobFIT Python API for extraction and matching.
       </p>
       <input
         id="resume-upload"
