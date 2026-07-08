@@ -43,8 +43,8 @@ export default function LandingPage() {
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Preview</p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-ink">Example ranked matches</h2>
           </div>
-          <Link href="/matches" className="hidden text-sm font-bold text-brand-600 hover:text-brand-700 sm:block">
-            View all
+          <Link href="/dashboard" className="hidden text-sm font-bold text-brand-600 hover:text-brand-700 sm:block">
+            Open dashboard
           </Link>
         </div>
         <div className="grid gap-5 lg:grid-cols-2">

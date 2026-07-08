@@ -40,7 +40,7 @@ export function ResumeRankForm() {
     try {
       const result = await rankResume(formData);
       localStorage.setItem("jobfit:ranked-results", JSON.stringify(result));
-      router.push("/matches");
+      router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong while ranking your resume.");
     } finally {
@@ -116,8 +116,8 @@ export function ResumeRankForm() {
       >
         {isLoading ? "Ranking with backend..." : useAiRecommendations ? "Generate matches + Gemini recruiter review" : "Generate real matches"}
       </button>
-      <Link href="/matches" className="mt-3 flex w-full justify-center text-sm font-semibold text-brand-600 hover:text-brand-700">
-        View mock matches instead
+      <Link href="/dashboard" className="mt-3 flex w-full justify-center text-sm font-semibold text-brand-600 hover:text-brand-700">
+        View demo matches on dashboard
       </Link>
     </div>
   );

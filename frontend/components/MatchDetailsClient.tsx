@@ -67,8 +67,8 @@ export function MatchDetailsClient({ id, fallbackJobs }: { id: string; fallbackJ
       <EmptyState
         title="Match not found"
         description="This job was not found in the current scan results. Return to matches or upload a resume again."
-        actionLabel="Back to matches"
-        actionHref="/matches"
+        actionLabel="Back to dashboard"
+        actionHref="/dashboard"
       />
     );
   }
@@ -91,8 +91,8 @@ export function MatchDetailsClient({ id, fallbackJobs }: { id: string; fallbackJ
 
   return (
     <>
-      <Link href="/matches" className="text-sm font-bold text-brand-600 hover:text-brand-700">
-        Back to matches
+      <Link href="/dashboard" className="text-sm font-bold text-brand-600 hover:text-brand-700">
+        Back to dashboard
       </Link>
 
       <div className="mt-6 overflow-hidden rounded-3xl bg-ink shadow-soft">

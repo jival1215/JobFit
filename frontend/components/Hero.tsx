@@ -22,10 +22,10 @@ export function Hero() {
               Upload resume
             </Link>
             <Link
-              href="/matches"
+              href="/dashboard"
               className="rounded-full border border-white/20 px-6 py-3 text-sm font-bold text-white transition hover:border-white/50 hover:bg-white/10"
             >
-              View mock matches
+              View demo matches
             </Link>
           </div>
         </div>

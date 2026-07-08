@@ -12,9 +12,6 @@ export function Footer() {
           <Link href="/dashboard" className="hover:text-ink">
             Dashboard
           </Link>
-          <Link href="/matches" className="hover:text-ink">
-            Matches
-          </Link>
           <Link href="/about" className="hover:text-ink">
             About
           </Link>
