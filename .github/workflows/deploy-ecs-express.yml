@@ -22,6 +22,10 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: jobfit-backend-deploy
+  cancel-in-progress: true
+
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
@@ -61,33 +65,87 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
 
-      - name: Deploy ECS Express Mode service
-        uses: aws-actions/amazon-ecs-deploy-express-service@v1
-        with:
-          service-name: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-          execution-role-arn: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole
-          infrastructure-role-arn: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/ecsInfrastructureRoleForExpressServices
-          container-port: 8080
-          cpu: '1024'
-          memory: '2048'
-          health-check-path: /api/health
-          min-task-count: 1
-          max-task-count: 4
-          auto-scaling-metric: AVERAGE_CPU
-          auto-scaling-target-value: 70
-          environment-variables: |
-            [
-              {"name":"PORT","value":"8080"},
-              {"name":"FRONTEND_ORIGINS","value":"https://main.d8rnzmcb1hxs.amplifyapp.com,https://jobfit-ebon.vercel.app"},
-              {"name":"FRONTEND_ORIGIN_REGEX","value":"https://.*\\.amplifyapp\\.com"},
-              {"name":"ENABLE_GEMINI_RECOMMENDATIONS","value":"true"},
-              {"name":"GEMINI_MODEL","value":"gemini-2.5-flash"},
-              {"name":"GEMINI_RECOMMENDATION_LIMIT","value":"5"},
-              {"name":"GEMINI_RECRUITER_TARGET_SIZE","value":"10"},
-              {"name":"GEMINI_RECRUITER_BATCH_SIZE","value":"5"},
-              {"name":"GEMINI_RECRUITER_MAX_CANDIDATES","value":"25"},
-              {"name":"GEMINI_RECRUITER_SCORE_WEIGHT","value":"0.20"},
-              {"name":"GEMINI_API_KEY","value":"${{ secrets.GEMINI_API_KEY }}"}
-            ]
+      - name: Deploy ECS service with task definition revision
+        env:
+          IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          FRONTEND_ORIGINS: https://main.d8rnzmcb1hxs.amplifyapp.com,https://jobfit-ebon.vercel.app
+          FRONTEND_ORIGIN_REGEX: https://.*\.amplifyapp\.com
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          SERVICE_JSON=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE")
+          BASE_TASK_DEF=$(echo "$SERVICE_JSON" | jq -r '
+            .services[0].deployments
+            | map(select(.runningCount > 0))[0].taskDefinition
+              // map(select(.status == "PRIMARY"))[0].taskDefinition
+              // map(select(.taskDefinition != null))[0].taskDefinition
+              // empty
+          ')
+
+          if [ -z "$BASE_TASK_DEF" ]; then
+            echo "Could not find a base task definition from the ECS service."
+            echo "$SERVICE_JSON"
+            exit 1
+          fi
+
+          echo "Base task definition: $BASE_TASK_DEF"
+          aws ecs describe-task-definition --task-definition "$BASE_TASK_DEF" --query taskDefinition > task-def.json
+
+          jq             --arg IMAGE_URI "$IMAGE_URI"             --arg FRONTEND_ORIGINS "$FRONTEND_ORIGINS"             --arg FRONTEND_ORIGIN_REGEX "$FRONTEND_ORIGIN_REGEX"             --arg GEMINI_API_KEY "$GEMINI_API_KEY" '
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy,
+              .deregisteredAt
+            )
+            | .containerDefinitions[0].image = $IMAGE_URI
+            | .containerDefinitions[0].portMappings = [
+                {
+                  "containerPort": 8080,
+                  "hostPort": 8080,
+                  "protocol": "tcp",
+                  "appProtocol": "http"
+                }
+              ]
+            | .containerDefinitions[0].environment = (
+                ((.containerDefinitions[0].environment // [])
+                  | map(select(.name as $name | [
+                      "PORT",
+                      "FRONTEND_ORIGINS",
+                      "FRONTEND_ORIGIN_REGEX",
+                      "ENABLE_GEMINI_RECOMMENDATIONS",
+                      "GEMINI_MODEL",
+                      "GEMINI_RECOMMENDATION_LIMIT",
+                      "GEMINI_RECRUITER_TARGET_SIZE",
+                      "GEMINI_RECRUITER_BATCH_SIZE",
+                      "GEMINI_RECRUITER_MAX_CANDIDATES",
+                      "GEMINI_RECRUITER_SCORE_WEIGHT",
+                      "GEMINI_API_KEY"
+                    ] | index($name) | not)))
+                + [
+                  {"name":"PORT","value":"8080"},
+                  {"name":"FRONTEND_ORIGINS","value":$FRONTEND_ORIGINS},
+                  {"name":"FRONTEND_ORIGIN_REGEX","value":$FRONTEND_ORIGIN_REGEX},
+                  {"name":"ENABLE_GEMINI_RECOMMENDATIONS","value":"true"},
+                  {"name":"GEMINI_MODEL","value":"gemini-2.5-flash"},
+                  {"name":"GEMINI_RECOMMENDATION_LIMIT","value":"5"},
+                  {"name":"GEMINI_RECRUITER_TARGET_SIZE","value":"10"},
+                  {"name":"GEMINI_RECRUITER_BATCH_SIZE","value":"5"},
+                  {"name":"GEMINI_RECRUITER_MAX_CANDIDATES","value":"25"},
+                  {"name":"GEMINI_RECRUITER_SCORE_WEIGHT","value":"0.20"},
+                  {"name":"GEMINI_API_KEY","value":$GEMINI_API_KEY}
+                ]
+              )
+          ' task-def.json > next-task-def.json
+
+          NEW_TASK_DEF=$(aws ecs register-task-definition             --cli-input-json file://next-task-def.json             --query "taskDefinition.taskDefinitionArn"             --output text)
+
+          echo "New task definition: $NEW_TASK_DEF"
+          aws ecs update-service             --cluster "$ECS_CLUSTER"             --service "$ECS_SERVICE"             --task-definition "$NEW_TASK_DEF"             --desired-count 1             --force-new-deployment
+
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
