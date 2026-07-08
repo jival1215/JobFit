@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { JobMatch } from "@/lib/mock-data";
 import { ApplyButton } from "./ApplyButton";
 import { MatchScoreBadge } from "./MatchScoreBadge";
+import { SaveMatchControls } from "./SaveMatchControls";
 import { SkillBadge } from "./SkillBadge";
 
 export function JobMatchCard({ job }: { job: JobMatch }) {
@@ -79,6 +80,7 @@ export function JobMatchCard({ job }: { job: JobMatch }) {
           {job.type} · {job.posted}
         </span>
         <div className="flex flex-wrap gap-3">
+          <SaveMatchControls job={job} />
           <Link
             href={detailHref}
             className="rounded-full border border-brand-200 bg-white px-4 py-2 text-sm font-bold text-brand-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"

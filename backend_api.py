@@ -9,11 +9,25 @@ from io import BytesIO
 from typing import Any
 
 import pandas as pd
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from gemini_recommender import enrich_ranked_with_gemini, gemini_enabled, rerank_top_matches_with_recruiter_agent
 from job_scout import mark_new_jobs
+from jobfit_db import (
+    authenticate_user,
+    create_session,
+    create_user,
+    delete_saved_match,
+    delete_session,
+    list_match_runs,
+    list_saved_matches,
+    save_match_run,
+    save_user_match,
+    saved_status_map,
+    user_from_token,
+    user_summary,
+)
 from matcher import rank_jobs
 from resume_utils import extract_resume_text
 from saved_jobs import load_statuses, merge_statuses, save_job_status, tracker_summary
@@ -21,6 +35,26 @@ from simplify_fetcher import JOB_SOURCES, fetch_markdown, parse_simplify_jobs
 
 
 app = FastAPI(title="JobFIT API", version="0.1.0")
+
+
+def _bearer_token(authorization: str | None) -> str:
+    if not authorization:
+        return ""
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        return ""
+    return token.strip()
+
+
+def _optional_user(authorization: str | None) -> dict[str, Any] | None:
+    return user_from_token(_bearer_token(authorization))
+
+
+def _required_user(authorization: str | None) -> dict[str, Any]:
+    user = _optional_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    return user
 
 
 def _cors_origins() -> list[str]:
@@ -278,6 +312,65 @@ def _records_from_ranked(ranked: pd.DataFrame, resume_text: str = "") -> list[di
     return records
 
 
+@app.post("/api/auth/register")
+def register(payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        user = create_user(str(payload.get("email", "")), str(payload.get("password", "")))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    token = create_session(int(user["id"]))
+    return {"token": token, "user": user}
+
+
+@app.post("/api/auth/login")
+def login(payload: dict[str, Any]) -> dict[str, Any]:
+    user = authenticate_user(str(payload.get("email", "")), str(payload.get("password", "")))
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = create_session(int(user["id"]))
+    return {"token": token, "user": user}
+
+
+@app.get("/api/auth/me")
+def me(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user = _required_user(authorization)
+    return {"user": user, "summary": user_summary(int(user["id"])), "matchRuns": list_match_runs(int(user["id"]))}
+
+
+@app.post("/api/auth/logout")
+def logout(authorization: str | None = Header(default=None)) -> dict[str, str]:
+    token = _bearer_token(authorization)
+    if token:
+        delete_session(token)
+    return {"status": "signed out"}
+
+
+@app.get("/api/saved-matches")
+def saved_matches(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user = _required_user(authorization)
+    return {"jobs": list_saved_matches(int(user["id"])), "summary": user_summary(int(user["id"]))}
+
+
+@app.post("/api/saved-matches")
+def save_match(payload: dict[str, Any], authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user = _required_user(authorization)
+    job = payload.get("job") if isinstance(payload.get("job"), dict) else payload
+    status = str(payload.get("status") or job.get("status") or "Saved")
+    notes = str(payload.get("notes", ""))
+    try:
+        result = save_user_match(int(user["id"]), job, status, notes)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"status": "saved", **result, "summary": user_summary(int(user["id"]))}
+
+
+@app.delete("/api/saved-matches/{job_id}")
+def remove_saved_match(job_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user = _required_user(authorization)
+    delete_saved_match(int(user["id"]), job_id)
+    return {"status": "deleted", "summary": user_summary(int(user["id"]))}
+
+
 @app.get("/")
 def root() -> dict[str, Any]:
     return {
@@ -306,6 +399,7 @@ async def rank_resume(
     preferred_roles: str = Form('["data","data science","data engineering","ai/ml"]'),
     preferred_locations: str = Form("remote, nyc, new york, new jersey, nj, philadelphia, pa, united states, usa"),
     use_ai_recommendations: bool = Form(False),
+    authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
     if source not in JOB_SOURCES:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
@@ -329,6 +423,7 @@ async def rank_resume(
     jobs = parse_simplify_jobs(markdown)
     jobs["source"] = source
     jobs = mark_new_jobs(jobs, source)
+    user = _optional_user(authorization)
     ranked = rank_jobs(resume_text, jobs, role_values, location_values)
     ai_recruiter_rerank_enabled = bool(use_ai_recommendations and gemini_enabled())
     if ai_recruiter_rerank_enabled:
@@ -345,11 +440,20 @@ async def rank_resume(
             resume_text,
             int(os.getenv("GEMINI_RECOMMENDATION_LIMIT", "5") or 5),
         )
-    ranked = merge_statuses(ranked, load_statuses())
+    if not user:
+        ranked = merge_statuses(ranked, load_statuses())
 
     records = _records_from_ranked(ranked, resume_text)
+    match_run_id = None
+    if user:
+        statuses = saved_status_map(int(user["id"]))
+        for job in records:
+            saved = statuses.get(str(job.get("backendId"))) or statuses.get(str(job.get("id")))
+            if saved:
+                job["status"] = saved["status"]
+                job["notes"] = saved.get("notes", "")
 
-    return {
+    response_payload = {
         "source": source,
         "sourceUrl": source_url,
         "fetchedAt": fetched_at,
@@ -361,18 +465,28 @@ async def rank_resume(
         "aiRecruiterReviewedCount": int(ranked.get("ai_recruiter_relatedness_score", pd.Series(dtype=float)).notna().sum()) if "ai_recruiter_relatedness_score" in ranked else 0,
         "aiEnhancedCount": sum(1 for job in records if job.get("aiEnhanced")),
         "jobs": records,
-        "tracker": tracker_summary(load_statuses()),
+        "tracker": user_summary(int(user["id"])) if user else tracker_summary(load_statuses()),
+        "user": user,
+        "matchRunId": match_run_id,
     }
+    if user:
+        match_run_id = save_match_run(int(user["id"]), response_payload)
+        response_payload["matchRunId"] = match_run_id
+        response_payload["tracker"] = user_summary(int(user["id"]))
+    return response_payload
 
 
 @app.get("/api/tracker")
-def tracker() -> dict[str, Any]:
+def tracker(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user = _optional_user(authorization)
+    if user:
+        return {"summary": user_summary(int(user["id"])), "jobs": list_saved_matches(int(user["id"]))}
     statuses = load_statuses()
     return {"summary": tracker_summary(statuses), "jobs": statuses.fillna("").to_dict(orient="records")}
 
 
 @app.post("/api/status")
-def update_status(payload: dict[str, Any]) -> dict[str, str]:
+def update_status(payload: dict[str, Any], authorization: str | None = Header(default=None)) -> dict[str, Any]:
     status = str(payload.get("status", ""))
     job = {
         "company": payload.get("company", ""),
@@ -380,6 +494,17 @@ def update_status(payload: dict[str, Any]) -> dict[str, str]:
         "location": payload.get("location", ""),
         "application_link": payload.get("applicationLink", ""),
     }
+    user = _optional_user(authorization)
+    if user:
+        job_payload = dict(payload)
+        job_payload.setdefault("backendId", payload.get("backendId") or payload.get("id") or "")
+        job_payload.setdefault("company", job["company"])
+        job_payload.setdefault("title", job["role"])
+        job_payload.setdefault("location", job["location"])
+        job_payload.setdefault("applyUrl", job["application_link"])
+        result = save_user_match(int(user["id"]), job_payload, status, str(payload.get("notes", "")))
+        return {"status": "saved", **result, "summary": user_summary(int(user["id"]))}
+
     save_job_status(
         job,
         status,

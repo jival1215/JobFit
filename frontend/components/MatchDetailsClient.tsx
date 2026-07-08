@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ApplyButton } from "@/components/ApplyButton";
 import { EmptyState } from "@/components/EmptyState";
 import { MatchScoreBadge } from "@/components/MatchScoreBadge";
+import { SaveMatchControls } from "@/components/SaveMatchControls";
 import { SkillBadge } from "@/components/SkillBadge";
 import type { RankResponse } from "@/lib/jobfit-api";
 import type { JobMatch } from "@/lib/mock-data";
@@ -114,6 +115,7 @@ export function MatchDetailsClient({ id, fallbackJobs }: { id: string; fallbackJ
           </div>
           <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
             <MatchScoreBadge score={job.matchScore ?? job.score} recommendation={job.recommendation} />
+            <SaveMatchControls job={job} />
             <ApplyButton
               href={applyHref}
               className="flex justify-center rounded-full bg-brand-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-600"

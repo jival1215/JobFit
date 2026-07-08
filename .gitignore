@@ -9,3 +9,6 @@ seen_jobs.csv
 frontend/node_modules/
 frontend/.next/
 frontend/.next.stale-*/
+
+jobfit_local.db
+jobfit_local.db-*

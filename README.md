@@ -1,8 +1,8 @@
-# JobFit Simplify MVP
+# JobFIT
 
-JobFit Simplify MVP is a small Streamlit app that helps students decide which SimplifyJobs internships or entry-level roles to apply to first. Upload a resume, fetch postings from the SimplifyJobs GitHub README, and get a ranked list with match scores, matched skills, missing skills, application links, and resume tailoring tips.
+JobFIT is an AI-assisted job-matching platform for students and early-career candidates. Upload a resume, refresh real SimplifyJobs postings, rank opportunities by recruiter-style fit, and save the matches you want to track.
 
-The project intentionally avoids paid APIs, authentication, databases, and complex frontend work. It is built as a clean local MVP.
+The current product has a Next.js frontend, FastAPI backend, optional Gemini recruiter review, and a local SQLite account database that is designed to migrate cleanly to AWS Cognito plus RDS PostgreSQL.
 
 ## Live Links
 
@@ -23,17 +23,33 @@ The project intentionally avoids paid APIs, authentication, databases, and compl
 - Show resume tailoring tips per job.
 - Filter by role, location, company, and minimum score.
 - Export ranked results to CSV.
-- Save local job statuses: Saved, Applied, Skipped.
+- Create local user accounts and sign in with token-based auth.
+- Save match runs and user-specific Saved, Applied, and Skipped jobs in SQLite.
 - Optional Gemini recruiter review that reranks the strongest candidates and enhances recommendation text.
 
-## Setup
+## Local Setup
+
+Backend:
 
 ```bash
-cd /private/tmp/jobfit_simplify_mvp
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run app.py
+pip install -r requirements-api.txt
+uvicorn backend_api:app --reload --port 8000
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm install
+NEXT_PUBLIC_JOBFIT_API_URL=http://127.0.0.1:8000 npm run dev
+```
+
+Local accounts and saved matches are stored in `jobfit_local.db` by default. To use a different local database path:
+
+```bash
+JOBFIT_DB_PATH=/path/to/jobfit_local.db uvicorn backend_api:app --reload --port 8000
 ```
 
 ## Testing
@@ -52,6 +68,7 @@ jobfit_simplify_mvp/
   matcher.py
   skills.py
   saved_jobs.py
+  jobfit_db.py
   requirements.txt
   README.md
   tests/
@@ -83,7 +100,7 @@ See `docs/aws-deployment.md` for the full AWS migration checklist.
 
 ### Other Hosts
 
-The FastAPI backend lives in `backend_api.py`. For deployment hosts that auto-detect `app.py`, this repo now includes a tiny `app.py` shim that exposes `backend_api.app`. The legacy Streamlit UI is preserved as `streamlit_app.py`. You can still set the backend start command explicitly:
+The FastAPI backend lives in `backend_api.py`. Local auth and saved matches live in `jobfit_db.py` using SQLite. In AWS, this layer should move to Cognito for auth and RDS PostgreSQL for persistence. For deployment hosts that auto-detect `app.py`, this repo now includes a tiny `app.py` shim that exposes `backend_api.app`. The legacy Streamlit UI is preserved as `streamlit_app.py`. You can still set the backend start command explicitly:
 
 ```bash
 uvicorn backend_api:app --host 0.0.0.0 --port $PORT
