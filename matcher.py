@@ -63,15 +63,30 @@ def _age_to_days(age: str) -> int:
 
 def freshness_score(age: str) -> float:
     days = _age_to_days(age)
-    if days <= 3:
+    if days <= 1:
         return 1.0
-    if days <= 10:
-        return 0.8
+    if days <= 3:
+        return 0.95
+    if days <= 7:
+        return 0.85
+    if days <= 14:
+        return 0.7
     if days <= 30:
-        return 0.55
+        return 0.45
     if days <= 60:
-        return 0.35
-    return 0.2
+        return 0.2
+    return 0.05
+
+
+def scoring_weights() -> dict[str, float]:
+    return {
+        "similarity": 0.25,
+        "skill_overlap": 0.25,
+        "title_match": 0.15,
+        "concept_match": 0.10,
+        "location": 0.05,
+        "freshness": 0.20,
+    }
 
 
 def title_match_score(role: str, preferred_role_types: list[str] | None = None) -> float:
@@ -184,13 +199,14 @@ def rank_jobs(
         concept_score = recruiter_concept_score(resume_text, job_text)
         similarity = softened_similarity(raw_similarity, concept_score, title_score)
 
+        weights = scoring_weights()
         score = (
-            0.30 * similarity
-            + 0.30 * skill_overlap
-            + 0.20 * title_score
-            + 0.10 * concept_score
-            + 0.07 * loc_score
-            + 0.03 * fresh_score
+            weights["similarity"] * similarity
+            + weights["skill_overlap"] * skill_overlap
+            + weights["title_match"] * title_score
+            + weights["concept_match"] * concept_score
+            + weights["location"] * loc_score
+            + weights["freshness"] * fresh_score
         ) * 100
 
         breakdown = {
@@ -221,13 +237,14 @@ def rank_jobs(
 
 
 def build_score_breakdown(breakdown: dict[str, float]) -> str:
+    weights = scoring_weights()
     return (
-        f"Recruiter fit {breakdown['similarity_score']}/100; "
-        f"skill overlap {breakdown['skill_overlap_score']}/100; "
-        f"title match {breakdown['title_match_score']}/100; "
-        f"concept match {breakdown['concept_match_score']}/100; "
-        f"location {breakdown['location_match_score']}/100; "
-        f"freshness {breakdown['freshness_score']}/100."
+        f"Recruiter fit {breakdown['similarity_score']}/100 ({int(weights['similarity'] * 100)}% weight); "
+        f"skill overlap {breakdown['skill_overlap_score']}/100 ({int(weights['skill_overlap'] * 100)}%); "
+        f"title match {breakdown['title_match_score']}/100 ({int(weights['title_match'] * 100)}%); "
+        f"concept match {breakdown['concept_match_score']}/100 ({int(weights['concept_match'] * 100)}%); "
+        f"location {breakdown['location_match_score']}/100 ({int(weights['location'] * 100)}%); "
+        f"freshness {breakdown['freshness_score']}/100 ({int(weights['freshness'] * 100)}%)."
     )
 
 

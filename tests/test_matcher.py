@@ -50,6 +50,35 @@ class MatcherTests(unittest.TestCase):
         self.assertGreaterEqual(ranked.loc[0, "similarity_score"], 45)
         self.assertGreaterEqual(ranked.loc[0, "concept_match_score"], 45)
 
+    def test_fresh_posting_beats_stale_equivalent_posting(self):
+        resume = "Python SQL pandas dashboard data analytics machine learning"
+        jobs = pd.DataFrame(
+            [
+                {
+                    "company": "OldMatch",
+                    "role": "Data Analyst Intern",
+                    "location": "Remote in USA",
+                    "application_link": "https://example.com/old",
+                    "age": "2mo",
+                    "category": "Internship Roles",
+                },
+                {
+                    "company": "FreshMatch",
+                    "role": "Data Analyst Intern",
+                    "location": "Remote in USA",
+                    "application_link": "https://example.com/fresh",
+                    "age": "1d",
+                    "category": "Internship Roles",
+                },
+            ]
+        )
+
+        ranked = rank_jobs(resume, jobs)
+
+        self.assertEqual(ranked.loc[0, "company"], "FreshMatch")
+        self.assertGreaterEqual(ranked.loc[0, "freshness_score"], 95)
+        self.assertLessEqual(ranked.loc[1, "freshness_score"], 20)
+
 
 if __name__ == "__main__":
     unittest.main()
