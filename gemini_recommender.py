@@ -29,7 +29,7 @@ def _as_list(value: Any, limit: int = 6) -> list[str]:
     return cleaned[:limit]
 
 
-def _resume_excerpt(resume_text: str, max_chars: int = 2200) -> str:
+def _resume_excerpt(resume_text: str, max_chars: int = 4500) -> str:
     text = re.sub(r"\s+", " ", resume_text).strip()
     if len(text) <= max_chars:
         return text
@@ -106,10 +106,10 @@ def _build_prompt(row: pd.Series, resume_text: str) -> str:
 You are a concise career coach for an early-career CS student. Improve only the recommendation text for this job match.
 
 Rules:
-- Be brief. Prioritize speed and useful recruiter-style advice.
 - Do not change the match score, recommendation, company, title, or skills.
 - Do not invent experience, employers, metrics, certifications, or projects.
 - Resume keywords must be suggested only if truthful.
+- Keep advice practical, recruiter-style, and specific to this job.
 - Return only valid JSON. No markdown.
 
 Resume excerpt:
@@ -121,8 +121,8 @@ Job match data:
 Return this JSON shape:
 {{
   "personalizedSummary": "1 short sentence explaining the fit",
-  "matchExplanation": "1-2 short sentences explaining the fit and main gap",
-  "improvementTips": ["specific application/resume tip"],
+  "matchExplanation": "2-3 sentences explaining why this job fits the resume and what to watch out for",
+  "improvementTips": ["specific application/resume tip", "specific application/resume tip"],
   "resumeKeywords": ["keyword to add if truthful"],
   "suggestedExperience": ["project or experience to highlight"],
   "resumeBulletChanges": [
@@ -205,7 +205,7 @@ def _gemini_timeout(default: int = 8) -> int:
         return default
 
 
-def _gemini_max_tokens(default: int = 1200) -> int:
+def _gemini_max_tokens(default: int = 4096) -> int:
     try:
         return max(256, int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", str(default)) or default))
     except ValueError:
