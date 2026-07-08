@@ -94,9 +94,9 @@ You can paste another compatible SimplifyJobs raw README URL in the sidebar, suc
 This repo is now prepared to host both sides on AWS:
 
 - Frontend: AWS Amplify Hosting using `amplify.yml`.
-- Backend: AWS App Runner using the root `Dockerfile` and `requirements-api.txt`.
+- Backend: Amazon ECS Express Mode using the root `Dockerfile` and `requirements-api.txt`.
 
-See `docs/aws-deployment.md` for the full AWS migration checklist.
+See `docs/aws-deployment.md` for the ECS Express Mode and Amplify deployment checklist.
 
 ### Other Hosts
 

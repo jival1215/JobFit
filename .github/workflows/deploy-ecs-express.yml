@@ -1,0 +1,78 @@
+name: Build and Deploy Backend to ECS Express Mode
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+
+jobs:
+  deploy:
+    name: Build and deploy backend
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: GitHubActionsJobFitECS
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+
+      - name: Deploy ECS Express Mode service
+        uses: aws-actions/amazon-ecs-deploy-express-service@v1
+        with:
+          service-name: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          execution-role-arn: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole
+          infrastructure-role-arn: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/ecsInfrastructureRoleForExpressServices
+          container-port: 8080
+          cpu: '1024'
+          memory: '2048'
+          health-check-path: /api/health
+          min-task-count: 1
+          max-task-count: 4
+          auto-scaling-metric: AVERAGE_CPU
+          auto-scaling-target-value: 70
+          environment-variables: |
+            [
+              {"name":"PORT","value":"8080"},
+              {"name":"FRONTEND_ORIGINS","value":"${{ secrets.FRONTEND_ORIGINS }}"},
+              {"name":"FRONTEND_ORIGIN_REGEX","value":"https://.*\\.amplifyapp\\.com"},
+              {"name":"ENABLE_GEMINI_RECOMMENDATIONS","value":"true"},
+              {"name":"GEMINI_MODEL","value":"gemini-2.5-flash"},
+              {"name":"GEMINI_RECOMMENDATION_LIMIT","value":"5"},
+              {"name":"GEMINI_RECRUITER_TARGET_SIZE","value":"10"},
+              {"name":"GEMINI_RECRUITER_BATCH_SIZE","value":"5"},
+              {"name":"GEMINI_RECRUITER_MAX_CANDIDATES","value":"25"},
+              {"name":"GEMINI_RECRUITER_SCORE_WEIGHT","value":"0.20"},
+              {"name":"GEMINI_API_KEY","value":"${{ secrets.GEMINI_API_KEY }}"}
+            ]
