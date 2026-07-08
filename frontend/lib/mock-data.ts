@@ -30,6 +30,8 @@ export type JobMatch = {
   resumeKeywords?: string[];
   suggestedExperience?: string[];
   resumeBulletChanges?: ResumeBulletChange[];
+  aiEnhanced?: boolean;
+  aiProvider?: string;
   scoreBreakdown?: string;
   isNew?: boolean;
   status?: string;

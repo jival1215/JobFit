@@ -24,6 +24,7 @@ The project intentionally avoids paid APIs, authentication, databases, and compl
 - Filter by role, location, company, and minimum score.
 - Export ranked results to CSV.
 - Save local job statuses: Saved, Applied, Skipped.
+- Optional Gemini-enhanced recommendation text for top ranked jobs.
 
 ## Setup
 
@@ -98,5 +99,14 @@ The Next.js frontend should be deployed from the `frontend/` directory and confi
 
 ```bash
 NEXT_PUBLIC_JOBFIT_API_URL=https://jobfit-api-production.up.railway.app
+```
+
+Optional Gemini recommendation settings for the backend:
+
+```bash
+GEMINI_API_KEY=your_key_here
+GEMINI_MODEL=gemini-1.5-flash
+ENABLE_GEMINI_RECOMMENDATIONS=true
+GEMINI_RECOMMENDATION_LIMIT=5
 ```
 

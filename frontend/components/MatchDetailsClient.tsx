@@ -99,7 +99,14 @@ export function MatchDetailsClient({ id, fallbackJobs }: { id: string; fallbackJ
         <div className="grid gap-8 p-8 text-white lg:grid-cols-[1fr_auto] lg:items-start">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-200">{job.company}</p>
-            <h1 className="mt-4 max-w-4xl text-4xl font-black tracking-tight sm:text-5xl">{job.title}</h1>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <h1 className="max-w-4xl text-4xl font-black tracking-tight sm:text-5xl">{job.title}</h1>
+              {job.aiEnhanced ? (
+                <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-violet-800">
+                  Gemini-enhanced recommendations
+                </span>
+              ) : null}
+            </div>
             <p className="mt-4 text-slate-300">
               {job.location} · {job.type} · {job.posted}
             </p>
@@ -119,7 +126,7 @@ export function MatchDetailsClient({ id, fallbackJobs }: { id: string; fallbackJ
       <div className="mt-8 grid gap-8 lg:grid-cols-[1.15fr_.85fr]">
         <div className="space-y-8">
 
-          <FeedbackSection title="Resume bullets to rewrite">
+          <FeedbackSection title={job.aiEnhanced ? "Resume bullets to rewrite with Gemini" : "Resume bullets to rewrite"}>
             {resumeBulletChanges.length ? (
               <div className="space-y-4">
                 {resumeBulletChanges.map((change, index) => (

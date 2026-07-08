@@ -18,7 +18,14 @@ export function JobMatchCard({ job }: { job: JobMatch }) {
           <p className="text-sm font-medium text-slateSoft">
             {job.company} · {job.location}
           </p>
-          <h3 className="mt-2 text-xl font-bold text-ink transition group-hover:text-brand-700">{job.title}</h3>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <h3 className="text-xl font-bold text-ink transition group-hover:text-brand-700">{job.title}</h3>
+            {job.aiEnhanced ? (
+              <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-violet-700 ring-1 ring-violet-200">
+                Gemini-enhanced
+              </span>
+            ) : null}
+          </div>
         </div>
         <MatchScoreBadge score={job.matchScore ?? job.score} recommendation={job.recommendation} />
       </div>

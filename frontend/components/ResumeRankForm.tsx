@@ -14,6 +14,7 @@ export function ResumeRankForm() {
   const [source, setSource] = useState("Summer internships");
   const [locations, setLocations] = useState("Remote, NYC, New Jersey");
   const [roles, setRoles] = useState(["data", "data science", "data engineering", "ai/ml"]);
+  const [useAiRecommendations, setUseAiRecommendations] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -34,6 +35,7 @@ export function ResumeRankForm() {
     formData.append("source", source);
     formData.append("preferred_roles", JSON.stringify(roles));
     formData.append("preferred_locations", locations);
+    formData.append("use_ai_recommendations", String(useAiRecommendations));
 
     try {
       const result = await rankResume(formData);
@@ -91,13 +93,28 @@ export function ResumeRankForm() {
           ))}
         </div>
       </div>
+
+      <label className="mt-5 flex items-start gap-3 rounded-2xl border border-line bg-slate-50 p-4">
+        <input
+          type="checkbox"
+          checked={useAiRecommendations}
+          onChange={(event) => setUseAiRecommendations(event.target.checked)}
+          className="mt-1 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500"
+        />
+        <span>
+          <span className="block text-sm font-bold text-ink">Use Gemini for recommendation text</span>
+          <span className="mt-1 block text-sm leading-6 text-slateSoft">
+            Keeps the same match ranking, then uses Gemini only for resume tips and job feedback when the backend API key is configured.
+          </span>
+        </span>
+      </label>
       {error ? <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-medium text-red-700">{error}</p> : null}
       <button
         onClick={handleSubmit}
         disabled={isLoading}
         className="mt-6 flex w-full justify-center rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isLoading ? "Ranking with backend..." : "Generate real matches"}
+        {isLoading ? "Ranking with backend..." : useAiRecommendations ? "Generate matches + Gemini recommendations" : "Generate real matches"}
       </button>
       <Link href="/matches" className="mt-3 flex w-full justify-center text-sm font-semibold text-brand-600 hover:text-brand-700">
         View mock matches instead

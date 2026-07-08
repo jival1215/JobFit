@@ -12,6 +12,7 @@ import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+from gemini_recommender import enrich_ranked_with_gemini, gemini_enabled
 from job_scout import mark_new_jobs
 from matcher import rank_jobs
 from resume_utils import extract_resume_text
@@ -192,12 +193,29 @@ def _resume_change_guidance(row: pd.Series) -> dict[str, list[str]]:
     }
 
 
+def _ai_recommendations(row: pd.Series) -> dict[str, Any]:
+    raw = row.get("ai_recommendations", "")
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(str(raw))
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
 def _records_from_ranked(ranked: pd.DataFrame, resume_text: str = "") -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for index, row in ranked.reset_index(drop=True).iterrows():
         job_id = str(row.get("job_id", "")) or f"job-{index}"
         guidance = _resume_change_guidance(row)
-        bullet_guidance = _resume_bullet_guidance(row, resume_text)
+        ai_guidance = _ai_recommendations(row)
+        bullet_guidance = ai_guidance.get("resumeBulletChanges") or _resume_bullet_guidance(row, resume_text)
+        improvement_tips = ai_guidance.get("improvementTips") or [
+            part.strip() for part in str(row.get("tailoring_tips", "")).split(".") if part.strip()
+        ]
+        match_explanation = str(ai_guidance.get("matchExplanation") or row.get("match_explanation", ""))
+        personalized_summary = str(ai_guidance.get("personalizedSummary") or row.get("match_explanation", ""))
         records.append(
             {
                 "id": _safe_job_id(row, index),
@@ -216,14 +234,18 @@ def _records_from_ranked(ranked: pd.DataFrame, resume_text: str = "") -> list[di
                 "matchScore": float(row.get("match_score", 0) or 0),
                 "matchedSkills": _split_skills(row.get("matched_skills", "")),
                 "missingSkills": _split_skills(row.get("missing_skills", "")),
-                "summary": str(row.get("match_explanation", "")),
-                "personalizedSummary": str(row.get("match_explanation", "")),
-                "matchExplanation": str(row.get("match_explanation", "")),
-                "improvements": [part.strip() for part in str(row.get("tailoring_tips", "")).split(".") if part.strip()],
-                "improvementTips": [part.strip() for part in str(row.get("tailoring_tips", "")).split(".") if part.strip()],
+                "summary": personalized_summary,
+                "personalizedSummary": personalized_summary,
+                "matchExplanation": match_explanation,
+                "improvements": improvement_tips,
+                "improvementTips": improvement_tips,
                 "applyPlan": str(row.get("apply_plan", "")),
                 **guidance,
+                "resumeKeywords": ai_guidance.get("resumeKeywords") or guidance["resumeKeywords"],
+                "suggestedExperience": ai_guidance.get("suggestedExperience") or guidance["suggestedExperience"],
                 "resumeBulletChanges": bullet_guidance,
+                "aiEnhanced": bool(ai_guidance),
+                "aiProvider": str(row.get("ai_recommendations_provider", "")),
                 "scoreBreakdown": str(row.get("score_breakdown", "")),
                 "isNew": bool(row.get("is_new", False)),
                 "status": str(row.get("status", "")),
@@ -262,6 +284,7 @@ async def rank_resume(
     source: str = Form("Summer internships"),
     preferred_roles: str = Form('["data","data science","data engineering","ai/ml"]'),
     preferred_locations: str = Form("remote, nyc, new york, new jersey, nj, philadelphia, pa, united states, usa"),
+    use_ai_recommendations: bool = Form(False),
 ) -> dict[str, Any]:
     if source not in JOB_SOURCES:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
@@ -286,7 +309,15 @@ async def rank_resume(
     jobs["source"] = source
     jobs = mark_new_jobs(jobs, source)
     ranked = rank_jobs(resume_text, jobs, role_values, location_values)
+    if use_ai_recommendations and gemini_enabled():
+        ranked = enrich_ranked_with_gemini(
+            ranked,
+            resume_text,
+            int(os.getenv("GEMINI_RECOMMENDATION_LIMIT", "5") or 5),
+        )
     ranked = merge_statuses(ranked, load_statuses())
+
+    records = _records_from_ranked(ranked, resume_text)
 
     return {
         "source": source,
@@ -294,7 +325,10 @@ async def rank_resume(
         "fetchedAt": fetched_at,
         "count": int(len(ranked)),
         "newCount": int(ranked.get("is_new", pd.Series(False, index=ranked.index)).sum()),
-        "jobs": _records_from_ranked(ranked, resume_text),
+        "aiRecommendationsRequested": bool(use_ai_recommendations),
+        "aiRecommendationsEnabled": bool(use_ai_recommendations and gemini_enabled()),
+        "aiEnhancedCount": sum(1 for job in records if job.get("aiEnhanced")),
+        "jobs": records,
         "tracker": tracker_summary(load_statuses()),
     }
 

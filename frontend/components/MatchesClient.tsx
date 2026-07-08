@@ -52,6 +52,17 @@ export function MatchesClient({ fallbackJobs }: MatchesClientProps) {
               ? `Showing live SimplifyJobs results from ${ranked.source}${fetchedLabel ? `, refreshed ${fetchedLabel}` : ""}. ${ranked.newCount} jobs were new in this scan.`
               : "No backend scan is loaded yet, so this page is showing realistic mock matches."}
           </p>
+          {ranked?.aiRecommendationsRequested ? (
+            <p className={`mt-3 inline-flex rounded-full px-3 py-1 text-sm font-bold ${
+              ranked.aiRecommendationsEnabled
+                ? "bg-violet-50 text-violet-700 ring-1 ring-violet-200"
+                : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+            }`}>
+              {ranked.aiRecommendationsEnabled
+                ? `Gemini enhanced recommendation text for ${ranked.aiEnhancedCount ?? 0} top matches`
+                : "Gemini was requested, but the backend API key is not enabled"}
+            </p>
+          ) : null}
         </div>
         <div className="rounded-2xl border border-line bg-white p-4 text-sm text-slate-600 shadow-sm">
           <p className="font-semibold text-ink">Showing {filtered.length} of {jobs.length} matches</p>

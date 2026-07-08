@@ -6,6 +6,9 @@ export type RankResponse = {
   fetchedAt?: string;
   count: number;
   newCount: number;
+  aiRecommendationsRequested?: boolean;
+  aiRecommendationsEnabled?: boolean;
+  aiEnhancedCount?: number;
   jobs: JobMatch[];
   tracker?: Record<string, number>;
 };
