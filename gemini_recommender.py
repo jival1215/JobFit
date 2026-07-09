@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 import pandas as pd
@@ -212,6 +213,13 @@ def _gemini_max_tokens(default: int = 4096) -> int:
         return default
 
 
+def _gemini_workers(default: int = 5) -> int:
+    try:
+        return max(1, min(8, int(os.getenv("GEMINI_MAX_WORKERS", str(default)) or default)))
+    except ValueError:
+        return default
+
+
 def _generate_json(prompt: str, schema: dict[str, Any], timeout: int | None = None) -> dict[str, Any]:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
@@ -334,26 +342,40 @@ def rerank_top_matches_with_recruiter_agent(
     reviewed: set[int] = set()
 
     def review_until(count: int) -> None:
+        indices: list[int] = []
         for idx in range(min(count, len(reranked))):
             if idx in reviewed:
                 continue
             reviewed.add(idx)
-            row = reranked.loc[idx]
-            try:
-                result = get_recruiter_relatedness(row, resume_text)
-            except Exception as exc:
-                reranked.at[idx, "ai_recruiter_error"] = str(exc)
-                continue
-            if not result:
-                continue
-            agent_score = float(result["recruiterRelatednessScore"])
-            base_score = float(row.get("deterministic_match_score", row.get("match_score", 0)) or 0)
-            reranked.at[idx, "ai_recruiter_relatedness_score"] = agent_score
-            reranked.at[idx, "ai_recruiter_reasoning"] = result["recruiterRelatednessReasoning"]
-            reranked.at[idx, "ai_recruiter_evidence"] = json.dumps(result["recruiterRelatedEvidence"])
-            reranked.at[idx, "ai_recruiter_concerns"] = json.dumps(result["recruiterRelatedConcerns"])
-            reranked.at[idx, "ai_recruiter_provider"] = "Gemini"
-            reranked.at[idx, "match_score"] = _final_score(base_score, agent_score, ai_weight)
+            indices.append(idx)
+
+        if not indices:
+            return
+
+        max_workers = min(_gemini_workers(), len(indices))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(get_recruiter_relatedness, reranked.loc[idx].copy(), resume_text): idx
+                for idx in indices
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    reranked.at[idx, "ai_recruiter_error"] = str(exc)
+                    continue
+                if not result:
+                    continue
+                row = reranked.loc[idx]
+                agent_score = float(result["recruiterRelatednessScore"])
+                base_score = float(row.get("deterministic_match_score", row.get("match_score", 0)) or 0)
+                reranked.at[idx, "ai_recruiter_relatedness_score"] = agent_score
+                reranked.at[idx, "ai_recruiter_reasoning"] = result["recruiterRelatednessReasoning"]
+                reranked.at[idx, "ai_recruiter_evidence"] = json.dumps(result["recruiterRelatedEvidence"])
+                reranked.at[idx, "ai_recruiter_concerns"] = json.dumps(result["recruiterRelatedConcerns"])
+                reranked.at[idx, "ai_recruiter_provider"] = "Gemini"
+                reranked.at[idx, "match_score"] = _final_score(base_score, agent_score, ai_weight)
 
     reviewed_count = 0
     while True:
@@ -382,20 +404,31 @@ def enrich_ranked_with_gemini(ranked: pd.DataFrame, resume_text: str, limit: int
         return ranked
 
     enriched = ranked.copy()
-    for index, row in enriched.head(limit).iterrows():
-        try:
-            recommendations = get_gemini_recommendations(row, resume_text)
-        except Exception as exc:
-            enriched.at[index, "ai_recommendation_error"] = str(exc)
-            continue
+    indices = list(enriched.head(limit).index)
+    if not indices:
+        return enriched
 
-        if not recommendations:
-            continue
-        enriched.at[index, "ai_recommendations"] = json.dumps(recommendations)
-        enriched.at[index, "ai_recommendations_provider"] = "Gemini"
-        if recommendations.get("personalizedSummary"):
-            enriched.at[index, "match_explanation"] = recommendations["personalizedSummary"]
-        if recommendations.get("improvementTips"):
-            enriched.at[index, "tailoring_tips"] = ". ".join(recommendations["improvementTips"])
+    max_workers = min(_gemini_workers(default=2), len(indices))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(get_gemini_recommendations, enriched.loc[index].copy(), resume_text): index
+            for index in indices
+        }
+        for future in as_completed(futures):
+            index = futures[future]
+            try:
+                recommendations = future.result()
+            except Exception as exc:
+                enriched.at[index, "ai_recommendation_error"] = str(exc)
+                continue
+
+            if not recommendations:
+                continue
+            enriched.at[index, "ai_recommendations"] = json.dumps(recommendations)
+            enriched.at[index, "ai_recommendations_provider"] = "Gemini"
+            if recommendations.get("personalizedSummary"):
+                enriched.at[index, "match_explanation"] = recommendations["personalizedSummary"]
+            if recommendations.get("improvementTips"):
+                enriched.at[index, "tailoring_tips"] = ". ".join(recommendations["improvementTips"])
 
     return enriched

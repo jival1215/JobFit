@@ -114,8 +114,13 @@ export function ResumeRankForm() {
         disabled={isLoading}
         className="mt-6 flex w-full justify-center rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isLoading ? "Ranking with backend..." : useAiRecommendations ? "Generate matches + Gemini recruiter review" : "Generate real matches"}
+        {isLoading ? (useAiRecommendations ? "Running Gemini review..." : "Ranking with backend...") : useAiRecommendations ? "Generate matches + Gemini recruiter review" : "Generate real matches"}
       </button>
+      {isLoading && useAiRecommendations ? (
+        <p className="mt-3 text-center text-sm font-medium text-slateSoft">
+          Gemini is reviewing the strongest matches. This usually takes under 30 seconds.
+        </p>
+      ) : null}
       <Link href="/dashboard" className="mt-3 flex w-full justify-center text-sm font-semibold text-brand-600 hover:text-brand-700">
         View demo matches on dashboard
       </Link>
