@@ -18,13 +18,19 @@ from jobfit_db import (
     authenticate_user,
     create_session,
     create_user,
+    delete_resume_record,
     delete_saved_match,
     delete_session,
+    encryption_enabled,
+    get_resume_record,
     list_match_runs,
+    list_resumes,
     list_saved_matches,
     save_match_run,
+    save_resume_record,
     save_user_match,
     saved_status_map,
+    storage_backend,
     user_from_token,
     user_summary,
 )
@@ -335,7 +341,14 @@ def login(payload: dict[str, Any]) -> dict[str, Any]:
 @app.get("/api/auth/me")
 def me(authorization: str | None = Header(default=None)) -> dict[str, Any]:
     user = _required_user(authorization)
-    return {"user": user, "summary": user_summary(int(user["id"])), "matchRuns": list_match_runs(int(user["id"]))}
+    user_id = int(user["id"])
+    return {
+        "user": user,
+        "summary": user_summary(user_id),
+        "matchRuns": list_match_runs(user_id),
+        "resumes": list_resumes(user_id),
+        "resumeEncryptionEnabled": encryption_enabled(),
+    }
 
 
 @app.post("/api/auth/logout")
@@ -344,6 +357,39 @@ def logout(authorization: str | None = Header(default=None)) -> dict[str, str]:
     if token:
         delete_session(token)
     return {"status": "signed out"}
+
+
+@app.get("/api/resumes")
+def resumes(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user = _required_user(authorization)
+    return {
+        "resumes": list_resumes(int(user["id"])),
+        "encryptionEnabled": encryption_enabled(),
+        "summary": user_summary(int(user["id"])),
+    }
+
+
+@app.get("/api/resumes/{resume_id}")
+def resume_detail(
+    resume_id: int,
+    include_text: bool = False,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    user = _required_user(authorization)
+    try:
+        resume = get_resume_record(int(user["id"]), resume_id, include_text=include_text)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    return {"resume": resume}
+
+
+@app.delete("/api/resumes/{resume_id}")
+def remove_resume(resume_id: int, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user = _required_user(authorization)
+    delete_resume_record(int(user["id"]), resume_id)
+    return {"status": "deleted", "summary": user_summary(int(user["id"]))}
 
 
 @app.get("/api/saved-matches")
@@ -385,7 +431,7 @@ def root() -> dict[str, Any]:
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "storage": storage_backend()}
 
 
 @app.get("/api/sources")
@@ -418,13 +464,23 @@ async def rank_resume(
     if not resume_text:
         raise HTTPException(status_code=422, detail="Could not extract text from resume")
 
+    user = _optional_user(authorization)
+    stored_resume = None
+    if user:
+        stored_resume = save_resume_record(
+            int(user["id"]),
+            resume.filename or "resume",
+            resume.content_type or "application/octet-stream",
+            data,
+            resume_text,
+        )
+
     source_url = JOB_SOURCES[source]
     fetched_at = datetime.now(timezone.utc).isoformat()
     markdown = fetch_markdown(source_url)
     jobs = parse_simplify_jobs(markdown)
     jobs["source"] = source
     jobs = mark_new_jobs(jobs, source)
-    user = _optional_user(authorization)
     ranked = rank_jobs(resume_text, jobs, role_values, location_values)
     ai_recruiter_rerank_enabled = bool(use_ai_recommendations and gemini_enabled())
     if ai_recruiter_rerank_enabled:
@@ -468,9 +524,14 @@ async def rank_resume(
         "jobs": records,
         "tracker": user_summary(int(user["id"])) if user else tracker_summary(load_statuses()),
         "user": user,
+        "resume": stored_resume,
+        "resumeId": stored_resume["id"] if stored_resume else None,
+        "resumeEncryptionEnabled": bool(stored_resume and stored_resume.get("encrypted")),
         "matchRunId": match_run_id,
     }
     if user:
+        if stored_resume:
+            response_payload["resumeId"] = stored_resume["id"]
         match_run_id = save_match_run(int(user["id"]), response_payload)
         response_payload["matchRunId"] = match_run_id
         response_payload["tracker"] = user_summary(int(user["id"]))

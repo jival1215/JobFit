@@ -62,7 +62,7 @@ export function AccountClient() {
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-300">Signed in</p>
           <h1 className="mt-4 text-4xl font-black tracking-tight">{account.user.email}</h1>
           <p className="mt-4 text-sm leading-6 text-white/70">
-            Your account is backed by the local JobFIT SQLite database. This is the local version of the AWS user-account flow.
+            Your account stores saved jobs, resume records, and scan history. The local database path is built to move into AWS managed storage next.
           </p>
           <button
             type="button"
@@ -84,8 +84,8 @@ export function AccountClient() {
             </Link>
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-4">
-            {["Saved", "Applied", "Skipped", "Match runs"].map((key) => (
+          <div className="mt-6 grid gap-4 sm:grid-cols-5">
+            {["Saved", "Applied", "Skipped", "Match runs", "Resumes"].map((key) => (
               <div key={key} className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-2xl font-black text-ink">{summary[key] ?? 0}</p>
                 <p className="mt-1 text-sm font-semibold text-slateSoft">{key}</p>
@@ -93,19 +93,38 @@ export function AccountClient() {
             ))}
           </div>
 
-          <div className="mt-8">
-            <h3 className="text-lg font-black text-ink">Recent scans</h3>
-            <div className="mt-4 space-y-3">
-              {account.matchRuns?.length ? (
-                account.matchRuns.map((run) => (
-                  <div key={String(run.id)} className="rounded-2xl border border-line p-4 text-sm leading-6 text-slate-700">
-                    <p className="font-bold text-ink">{String(run.source)} · {String(run.count)} jobs</p>
-                    <p>{String(run.fetchedAt || run.createdAt || "Recent scan")}</p>
-                  </div>
-                ))
-              ) : (
-                <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slateSoft">No saved scans yet. Run a resume scan while signed in to store match history.</p>
-              )}
+          <div className="mt-8 grid gap-6 lg:grid-cols-2">
+            <div>
+              <h3 className="text-lg font-black text-ink">Recent scans</h3>
+              <div className="mt-4 space-y-3">
+                {account.matchRuns?.length ? (
+                  account.matchRuns.map((run) => (
+                    <div key={String(run.id)} className="rounded-2xl border border-line p-4 text-sm leading-6 text-slate-700">
+                      <p className="font-bold text-ink">{String(run.source)} · {String(run.count)} jobs</p>
+                      <p>{String(run.fetchedAt || run.createdAt || "Recent scan")}</p>
+                      {run.resumeId ? <p className="text-xs font-semibold text-slateSoft">Resume #{String(run.resumeId)}</p> : null}
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slateSoft">No saved scans yet. Run a resume scan while signed in to store match history.</p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-black text-ink">Stored resumes</h3>
+              <div className="mt-4 space-y-3">
+                {account.resumes?.length ? (
+                  account.resumes.map((resume) => (
+                    <div key={resume.id} className="rounded-2xl border border-line p-4 text-sm leading-6 text-slate-700">
+                      <p className="font-bold text-ink">{resume.filename}</p>
+                      <p>{Math.max(1, Math.round(resume.fileSize / 1024))}KB · {resume.encrypted ? "Encrypted" : "Stored without app encryption key"}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slateSoft">No resume records yet. Upload while signed in to store one.</p>
+                )}
+              </div>
             </div>
           </div>
         </section>
@@ -118,7 +137,7 @@ export function AccountClient() {
       <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Local account</p>
       <h1 className="mt-3 text-4xl font-black tracking-tight text-ink">Save matches across sessions.</h1>
       <p className="mt-4 text-sm leading-6 text-slateSoft">
-        Create a local JobFIT account to store match runs and saved/applied/skipped jobs in SQLite. This is the local foundation for AWS Cognito and RDS later.
+        Create a JobFIT account to store resume records, match runs, recommendations, and saved/applied/skipped jobs. This is the foundation for AWS Cognito and managed storage.
       </p>
 
       <div className="mt-6 flex rounded-full bg-slate-100 p-1">

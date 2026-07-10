@@ -4,7 +4,15 @@ export type User = { id: number; email: string; createdAt: string };
 
 export type AuthResponse = { token: string; user: User };
 
-export type AccountResponse = { user: User; summary: Record<string, number>; matchRuns: Array<Record<string, unknown>> };
+export type ResumeRecord = { id: number; filename: string; contentType: string; fileSize: number; sha256: string; encrypted: boolean; createdAt: string };
+
+export type AccountResponse = {
+  user: User;
+  summary: Record<string, number>;
+  matchRuns: Array<Record<string, unknown>>;
+  resumes?: ResumeRecord[];
+  resumeEncryptionEnabled?: boolean;
+};
 
 export type SavedMatchesResponse = { jobs: JobMatch[]; summary: Record<string, number> };
 
@@ -23,10 +31,13 @@ export type RankResponse = {
   tracker?: Record<string, number>;
   user?: User | null;
   matchRunId?: number | null;
+  resume?: ResumeRecord | null;
+  resumeId?: number | null;
+  resumeEncryptionEnabled?: boolean;
 };
 
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_JOBFIT_API_URL || "https://jo-38a8bf22204d4ef3be83fbe102337105.ecs.us-east-2.on.aws";
+  process.env.NEXT_PUBLIC_JOBFIT_API_URL || "https://jobfit-api-production.up.railway.app";
 export const AUTH_TOKEN_KEY = "jobfit:auth-token";
 
 export function getAuthToken() {

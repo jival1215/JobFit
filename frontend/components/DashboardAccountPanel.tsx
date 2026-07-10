@@ -62,7 +62,7 @@ export function DashboardAccountPanel() {
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Account</p>
             <h2 className="mt-2 text-2xl font-black text-ink">Signed in as {account.user.email}</h2>
             <p className="mt-2 text-sm leading-6 text-slateSoft">
-              Matches you save on this dashboard are stored in your local JobFIT database.
+              Saved jobs, scan history, and uploaded resume records are stored behind your signed-in JobFIT account.
             </p>
           </div>
           <button
@@ -73,8 +73,8 @@ export function DashboardAccountPanel() {
             Sign out
           </button>
         </div>
-        <div className="mt-6 grid gap-3 sm:grid-cols-4">
-          {["Saved", "Applied", "Skipped", "Match runs"].map((key) => (
+        <div className="mt-6 grid gap-3 sm:grid-cols-5">
+          {["Saved", "Applied", "Skipped", "Match runs", "Resumes"].map((key) => (
             <div key={key} className="rounded-2xl bg-slate-50 p-4">
               <p className="text-2xl font-black text-ink">{summary[key] ?? 0}</p>
               <p className="mt-1 text-sm font-semibold text-slateSoft">{key}</p>
@@ -92,7 +92,7 @@ export function DashboardAccountPanel() {
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Account</p>
           <h2 className="mt-2 text-2xl font-black text-ink">Sign in to save matches and scan history.</h2>
           <p className="mt-2 text-sm leading-6 text-slateSoft">
-            You can browse demo matches without an account, but signing in lets JobFIT remember saved, applied, and skipped jobs locally.
+            You can browse demo matches without an account, but signing in lets JobFIT store resumes, saved jobs, and recommendation history for your workflow.
           </p>
         </div>
         <div>

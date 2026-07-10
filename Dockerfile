@@ -14,7 +14,7 @@ COPY requirements-api.txt ./
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements-api.txt
 
-COPY backend_api.py app.py gemini_recommender.py job_scout.py jobfit_db.py matcher.py resume_utils.py saved_jobs.py simplify_fetcher.py skills.py us_job_finder_fetcher.py ./
+COPY backend_api.py app.py gemini_recommender.py job_scout.py jobfit_db.py supabase_store.py matcher.py resume_utils.py saved_jobs.py simplify_fetcher.py skills.py us_job_finder_fetcher.py ./
 
 EXPOSE 8080
 

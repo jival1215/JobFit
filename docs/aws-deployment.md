@@ -140,3 +140,17 @@ The local account system uses SQLite so we can build quickly. Before using real 
 ## Notes
 
 Do not commit API keys or database passwords. Use AWS Secrets Manager, SSM Parameter Store, ECS secrets, or GitHub Actions secrets for `GEMINI_API_KEY` and database credentials.
+
+
+## Account and Resume Storage
+
+The current MVP stores users, sessions, resume records, match runs, saved jobs, and recommendation payloads through `jobfit_db.py`. In local development this uses SQLite. On AWS, do not store real user data in disposable container storage long term. Use one of these paths before production users:
+
+- Short MVP path: mount persistent encrypted storage and set `JOBFIT_DB_PATH` to that mount.
+- Production path: move accounts to Cognito, structured data to RDS PostgreSQL, and original resume files to encrypted S3.
+
+Set `JOBFIT_ENCRYPTION_KEY` as an AWS secret or environment variable so stored resume files and extracted text are encrypted by the app before being written. Generate it with:
+
+```bash
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```

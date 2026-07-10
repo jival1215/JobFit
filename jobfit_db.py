@@ -7,14 +7,62 @@ import json
 import os
 import secrets
 import sqlite3
+
+import supabase_store
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+try:
+    from cryptography.fernet import Fernet, InvalidToken
+except ImportError:  # Local dev can run without encryption until requirements are installed.
+    Fernet = None
+
+    class InvalidToken(Exception):
+        pass
+
 DB_PATH = Path(os.getenv("JOBFIT_DB_PATH", "jobfit_local.db"))
 SESSION_DAYS = int(os.getenv("JOBFIT_SESSION_DAYS", "14") or 14)
 STATUSES = {"Saved", "Applied", "Skipped"}
+
+
+def encryption_enabled() -> bool:
+    if supabase_store.configured():
+        return supabase_store.encryption_enabled()
+    return bool(os.getenv("JOBFIT_ENCRYPTION_KEY", "").strip())
+
+
+def storage_backend() -> str:
+    return "supabase" if supabase_store.configured() else "sqlite"
+
+
+def _fernet():
+    key = os.getenv("JOBFIT_ENCRYPTION_KEY", "").strip()
+    if not key:
+        return None
+    if Fernet is None:
+        raise RuntimeError("Install cryptography to use JOBFIT_ENCRYPTION_KEY")
+    return Fernet(key.encode("utf-8"))
+
+
+def _secure_encode(data: bytes) -> tuple[str, bool]:
+    fernet = _fernet()
+    if fernet:
+        return fernet.encrypt(data).decode("utf-8"), True
+    return base64.b64encode(data).decode("ascii"), False
+
+
+def _secure_decode(value: str, encrypted: bool) -> bytes:
+    if encrypted:
+        fernet = _fernet()
+        if not fernet:
+            raise ValueError("Resume data is encrypted but JOBFIT_ENCRYPTION_KEY is not configured")
+        try:
+            return fernet.decrypt(value.encode("utf-8"))
+        except InvalidToken as exc:
+            raise ValueError("Could not decrypt stored resume data") from exc
+    return base64.b64decode(value.encode("ascii"))
 
 
 def utc_now() -> str:
@@ -59,6 +107,7 @@ def init_db(path: Path | None = None) -> None:
             CREATE TABLE IF NOT EXISTS match_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                resume_id INTEGER REFERENCES resumes(id) ON DELETE SET NULL,
                 source TEXT NOT NULL,
                 source_url TEXT,
                 fetched_at TEXT,
@@ -66,6 +115,19 @@ def init_db(path: Path | None = None) -> None:
                 new_count INTEGER NOT NULL DEFAULT 0,
                 ai_enabled INTEGER NOT NULL DEFAULT 0,
                 jobs_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS resumes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                filename TEXT NOT NULL,
+                content_type TEXT,
+                file_size INTEGER NOT NULL DEFAULT 0,
+                sha256 TEXT NOT NULL,
+                file_blob TEXT NOT NULL,
+                extracted_text TEXT NOT NULL,
+                encrypted INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             );
 
@@ -89,6 +151,13 @@ def init_db(path: Path | None = None) -> None:
             );
             """
         )
+        columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(match_runs)").fetchall()}
+        if "resume_id" not in columns:
+            conn.execute("ALTER TABLE match_runs ADD COLUMN resume_id INTEGER REFERENCES resumes(id) ON DELETE SET NULL")
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def _hash_password(password: str, salt: bytes | None = None) -> str:
@@ -115,6 +184,8 @@ def _user_dict(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def create_user(email: str, password: str) -> dict[str, Any]:
+    if supabase_store.configured():
+        return supabase_store.create_user(email, password)
     email = email.strip().lower()
     if not email or "@" not in email:
         raise ValueError("Enter a valid email address")
@@ -134,6 +205,8 @@ def create_user(email: str, password: str) -> dict[str, Any]:
 
 
 def authenticate_user(email: str, password: str) -> dict[str, Any] | None:
+    if supabase_store.configured():
+        return supabase_store.authenticate_user(email, password)
     init_db()
     with db_connection() as conn:
         row = conn.execute("SELECT * FROM users WHERE email = ?", (email.strip().lower(),)).fetchone()
@@ -143,6 +216,8 @@ def authenticate_user(email: str, password: str) -> dict[str, Any] | None:
 
 
 def create_session(user_id: int) -> str:
+    if supabase_store.configured():
+        return supabase_store.create_session(user_id)
     init_db()
     token = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
@@ -150,18 +225,23 @@ def create_session(user_id: int) -> str:
     with db_connection() as conn:
         conn.execute(
             "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-            (token, user_id, now.isoformat(), expires.isoformat()),
+            (_hash_token(token), user_id, now.isoformat(), expires.isoformat()),
         )
     return token
 
 
 def delete_session(token: str) -> None:
+    if supabase_store.configured():
+        supabase_store.delete_session(token)
+        return
     init_db()
     with db_connection() as conn:
-        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        conn.execute("DELETE FROM sessions WHERE token = ?", (_hash_token(token),))
 
 
 def user_from_token(token: str | None) -> dict[str, Any] | None:
+    if supabase_store.configured():
+        return supabase_store.user_from_token(token)
     if not token:
         return None
     init_db()
@@ -173,7 +253,7 @@ def user_from_token(token: str | None) -> dict[str, Any] | None:
             JOIN users ON users.id = sessions.user_id
             WHERE sessions.token = ?
             """,
-            (token,),
+            (_hash_token(token),),
         ).fetchone()
     if not row:
         return None
@@ -184,16 +264,133 @@ def user_from_token(token: str | None) -> dict[str, Any] | None:
     return _user_dict(row)
 
 
+def save_resume_record(
+    user_id: int,
+    filename: str,
+    content_type: str,
+    data: bytes,
+    extracted_text: str,
+) -> dict[str, Any]:
+    if supabase_store.configured():
+        return supabase_store.save_resume_record(user_id, filename, content_type, data, extracted_text)
+    init_db()
+    now = utc_now()
+    digest = hashlib.sha256(data).hexdigest()
+    stored_file, file_encrypted = _secure_encode(data)
+    stored_text, text_encrypted = _secure_encode(extracted_text.encode("utf-8"))
+    encrypted = file_encrypted and text_encrypted
+    with db_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO resumes (
+                user_id, filename, content_type, file_size, sha256, file_blob,
+                extracted_text, encrypted, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                filename,
+                content_type,
+                len(data),
+                digest,
+                stored_file,
+                stored_text,
+                1 if encrypted else 0,
+                now,
+            ),
+        )
+        resume_id = int(cursor.lastrowid)
+    return {
+        "id": resume_id,
+        "filename": filename,
+        "contentType": content_type,
+        "fileSize": len(data),
+        "sha256": digest,
+        "encrypted": encrypted,
+        "createdAt": now,
+    }
+
+
+def list_resumes(user_id: int, limit: int = 10) -> list[dict[str, Any]]:
+    if supabase_store.configured():
+        return supabase_store.list_resumes(user_id, limit)
+    init_db()
+    with db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, filename, content_type, file_size, sha256, encrypted, created_at
+            FROM resumes
+            WHERE user_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (user_id, limit),
+        ).fetchall()
+    return [
+        {
+            "id": int(row["id"]),
+            "filename": row["filename"],
+            "contentType": row["content_type"] or "",
+            "fileSize": int(row["file_size"]),
+            "sha256": row["sha256"],
+            "encrypted": bool(row["encrypted"]),
+            "createdAt": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
+def get_resume_record(user_id: int, resume_id: int, include_text: bool = False) -> dict[str, Any] | None:
+    if supabase_store.configured():
+        return supabase_store.get_resume_record(user_id, resume_id, include_text)
+    init_db()
+    with db_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT *
+            FROM resumes
+            WHERE user_id = ? AND id = ?
+            """,
+            (user_id, resume_id),
+        ).fetchone()
+    if not row:
+        return None
+    result = {
+        "id": int(row["id"]),
+        "filename": row["filename"],
+        "contentType": row["content_type"] or "",
+        "fileSize": int(row["file_size"]),
+        "sha256": row["sha256"],
+        "encrypted": bool(row["encrypted"]),
+        "createdAt": row["created_at"],
+    }
+    if include_text:
+        result["extractedText"] = _secure_decode(str(row["extracted_text"]), bool(row["encrypted"])).decode("utf-8")
+    return result
+
+
+def delete_resume_record(user_id: int, resume_id: int) -> None:
+    if supabase_store.configured():
+        supabase_store.delete_resume_record(user_id, resume_id)
+        return
+    init_db()
+    with db_connection() as conn:
+        conn.execute("DELETE FROM resumes WHERE user_id = ? AND id = ?", (user_id, resume_id))
+
+
 def save_match_run(user_id: int, payload: dict[str, Any]) -> int:
+    if supabase_store.configured():
+        return supabase_store.save_match_run(user_id, payload)
     init_db()
     with db_connection() as conn:
         cursor = conn.execute(
             """
-            INSERT INTO match_runs (user_id, source, source_url, fetched_at, job_count, new_count, ai_enabled, jobs_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO match_runs (user_id, resume_id, source, source_url, fetched_at, job_count, new_count, ai_enabled, jobs_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
+                payload.get("resumeId"),
                 payload.get("source", ""),
                 payload.get("sourceUrl", ""),
                 payload.get("fetchedAt", ""),
@@ -208,11 +405,13 @@ def save_match_run(user_id: int, payload: dict[str, Any]) -> int:
 
 
 def list_match_runs(user_id: int, limit: int = 10) -> list[dict[str, Any]]:
+    if supabase_store.configured():
+        return supabase_store.list_match_runs(user_id, limit)
     init_db()
     with db_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, source, source_url, fetched_at, job_count, new_count, ai_enabled, created_at
+            SELECT id, resume_id, source, source_url, fetched_at, job_count, new_count, ai_enabled, created_at
             FROM match_runs
             WHERE user_id = ?
             ORDER BY id DESC
@@ -223,6 +422,7 @@ def list_match_runs(user_id: int, limit: int = 10) -> list[dict[str, Any]]:
     return [
         {
             "id": int(row["id"]),
+            "resumeId": int(row["resume_id"]) if row["resume_id"] is not None else None,
             "source": row["source"],
             "sourceUrl": row["source_url"],
             "fetchedAt": row["fetched_at"],
@@ -236,6 +436,8 @@ def list_match_runs(user_id: int, limit: int = 10) -> list[dict[str, Any]]:
 
 
 def save_user_match(user_id: int, job: dict[str, Any], status: str = "Saved", notes: str = "") -> dict[str, Any]:
+    if supabase_store.configured():
+        return supabase_store.save_user_match(user_id, job, status, notes)
     if status not in STATUSES:
         raise ValueError("Status must be Saved, Applied, or Skipped")
     init_db()
@@ -285,6 +487,8 @@ def save_user_match(user_id: int, job: dict[str, Any], status: str = "Saved", no
 
 
 def list_saved_matches(user_id: int) -> list[dict[str, Any]]:
+    if supabase_store.configured():
+        return supabase_store.list_saved_matches(user_id)
     init_db()
     with db_connection() as conn:
         rows = conn.execute(
@@ -315,6 +519,8 @@ def list_saved_matches(user_id: int) -> list[dict[str, Any]]:
 
 
 def saved_status_map(user_id: int) -> dict[str, dict[str, str]]:
+    if supabase_store.configured():
+        return supabase_store.saved_status_map(user_id)
     init_db()
     with db_connection() as conn:
         rows = conn.execute(
@@ -325,12 +531,17 @@ def saved_status_map(user_id: int) -> dict[str, dict[str, str]]:
 
 
 def delete_saved_match(user_id: int, job_id: str) -> None:
+    if supabase_store.configured():
+        supabase_store.delete_saved_match(user_id, job_id)
+        return
     init_db()
     with db_connection() as conn:
         conn.execute("DELETE FROM saved_matches WHERE user_id = ? AND job_id = ?", (user_id, job_id))
 
 
 def user_summary(user_id: int) -> dict[str, int]:
+    if supabase_store.configured():
+        return supabase_store.user_summary(user_id)
     init_db()
     with db_connection() as conn:
         rows = conn.execute(
@@ -338,7 +549,14 @@ def user_summary(user_id: int) -> dict[str, int]:
             (user_id,),
         ).fetchall()
         runs = conn.execute("SELECT COUNT(*) as count FROM match_runs WHERE user_id = ?", (user_id,)).fetchone()
-    summary = {"Saved": 0, "Applied": 0, "Skipped": 0, "Match runs": int(runs["count"] if runs else 0)}
+        resumes = conn.execute("SELECT COUNT(*) as count FROM resumes WHERE user_id = ?", (user_id,)).fetchone()
+    summary = {
+        "Saved": 0,
+        "Applied": 0,
+        "Skipped": 0,
+        "Match runs": int(runs["count"] if runs else 0),
+        "Resumes": int(resumes["count"] if resumes else 0),
+    }
     for row in rows:
         summary[str(row["status"])] = int(row["count"])
     return summary
