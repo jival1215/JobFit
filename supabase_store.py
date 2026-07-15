@@ -129,10 +129,20 @@ def _secure_decode(value: str, encrypted: bool) -> bytes:
 
 
 def _user_dict(row: dict[str, Any]) -> dict[str, Any]:
-    return {"id": int(row["id"]), "email": str(row["email"]), "createdAt": str(row["created_at"])}
+    first_name = str(row.get("first_name") or "").strip()
+    last_name = str(row.get("last_name") or "").strip()
+    display_name = " ".join(part for part in [first_name, last_name] if part).strip()
+    return {
+        "id": int(row["id"]),
+        "email": str(row["email"]),
+        "firstName": first_name,
+        "lastName": last_name,
+        "displayName": display_name or str(row["email"]),
+        "createdAt": str(row["created_at"]),
+    }
 
 
-def create_user(email: str, password: str) -> dict[str, Any]:
+def create_user(email: str, password: str, first_name: str = "", last_name: str = "") -> dict[str, Any]:
     email = email.strip().lower()
     if not email or "@" not in email:
         raise ValueError("Enter a valid email address")
@@ -144,7 +154,13 @@ def create_user(email: str, password: str) -> dict[str, Any]:
     rows = _request(
         "POST",
         "users",
-        payload={"email": email, "password_hash": _hash_password(password), "created_at": utc_now()},
+        payload={
+            "email": email,
+            "first_name": first_name.strip(),
+            "last_name": last_name.strip(),
+            "password_hash": _hash_password(password),
+            "created_at": utc_now(),
+        },
         prefer="return=representation",
     )
     return _user_dict(rows[0])
@@ -184,7 +200,7 @@ def user_from_token(token: str | None) -> dict[str, Any] | None:
     if expires_at <= datetime.now(timezone.utc):
         delete_session(token)
         return None
-    users = _request("GET", "users", params={"select": "id,email,created_at", "id": _eq(int(rows[0]["user_id"])), "limit": "1"})
+    users = _request("GET", "users", params={"select": "id,email,first_name,last_name,created_at", "id": _eq(int(rows[0]["user_id"])), "limit": "1"})
     return _user_dict(users[0]) if users else None
 
 

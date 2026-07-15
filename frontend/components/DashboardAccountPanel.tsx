@@ -13,6 +13,8 @@ import {
 
 export function DashboardAccountPanel() {
   const [mode, setMode] = useState<"login" | "register">("login");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [account, setAccount] = useState<AccountResponse | null>(null);
@@ -36,10 +38,12 @@ export function DashboardAccountPanel() {
     setLoading(true);
     setError("");
     try {
-      const result = mode === "register" ? await registerAccount(email, password) : await loginAccount(email, password);
+      const result = mode === "register" ? await registerAccount(email, password, firstName, lastName) : await loginAccount(email, password);
       setAuthToken(result.token);
       setAccount(await fetchAccount());
       setPassword("");
+      setFirstName("");
+      setLastName("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to continue");
     } finally {
@@ -60,7 +64,7 @@ export function DashboardAccountPanel() {
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Account</p>
-            <h2 className="mt-2 text-2xl font-black text-ink">Signed in as {account.user.email}</h2>
+            <h2 className="mt-2 text-2xl font-black text-ink">Signed in as {account.user.displayName || account.user.email}</h2>
             <p className="mt-2 text-sm leading-6 text-slateSoft">
               Saved jobs, scan history, and uploaded resume records are stored behind your signed-in JobFIT account.
             </p>
@@ -108,6 +112,24 @@ export function DashboardAccountPanel() {
               </button>
             ))}
           </div>
+          {mode === "register" ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <input
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+                className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
+                placeholder="First name"
+                type="text"
+              />
+              <input
+                value={lastName}
+                onChange={(event) => setLastName(event.target.value)}
+                className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
+                placeholder="Last name"
+                type="text"
+              />
+            </div>
+          ) : null}
           <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
             <input
               value={email}

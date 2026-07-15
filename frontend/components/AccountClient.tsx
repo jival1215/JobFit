@@ -14,6 +14,8 @@ import {
 
 export function AccountClient() {
   const [mode, setMode] = useState<"login" | "register">("login");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [account, setAccount] = useState<AccountResponse | null>(null);
@@ -37,10 +39,12 @@ export function AccountClient() {
     setLoading(true);
     setError("");
     try {
-      const result = mode === "register" ? await registerAccount(email, password) : await loginAccount(email, password);
+      const result = mode === "register" ? await registerAccount(email, password, firstName, lastName) : await loginAccount(email, password);
       setAuthToken(result.token);
       setAccount(await fetchAccount());
       setPassword("");
+      setFirstName("");
+      setLastName("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to continue");
     } finally {
@@ -60,9 +64,9 @@ export function AccountClient() {
       <div className="grid gap-8 lg:grid-cols-[.85fr_1.15fr]">
         <section className="rounded-3xl bg-ink p-8 text-white shadow-soft">
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-300">Signed in</p>
-          <h1 className="mt-4 text-4xl font-black tracking-tight">{account.user.email}</h1>
+          <h1 className="mt-4 text-4xl font-black tracking-tight">{account.user.displayName || account.user.email}</h1>
           <p className="mt-4 text-sm leading-6 text-white/70">
-            Your account stores saved jobs, resume records, and scan history. The local database path is built to move into AWS managed storage next.
+            Your account stores saved jobs, resume records, and scan history. Your data is stored through the JobFIT backend and Supabase persistence layer.
           </p>
           <button
             type="button"
@@ -77,7 +81,7 @@ export function AccountClient() {
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
               <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Saved workflow</p>
-              <h2 className="mt-2 text-2xl font-black text-ink">Your local job database</h2>
+              <h2 className="mt-2 text-2xl font-black text-ink">Your JobFIT workspace</h2>
             </div>
             <Link href="/dashboard" className="rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white hover:bg-brand-700">
               View dashboard
@@ -134,7 +138,7 @@ export function AccountClient() {
 
   return (
     <section className="mx-auto max-w-xl rounded-3xl border border-line bg-white p-8 shadow-soft">
-      <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Local account</p>
+      <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Account</p>
       <h1 className="mt-3 text-4xl font-black tracking-tight text-ink">Save matches across sessions.</h1>
       <p className="mt-4 text-sm leading-6 text-slateSoft">
         Create a JobFIT account to store resume records, match runs, recommendations, and saved/applied/skipped jobs. This is the foundation for AWS Cognito and managed storage.
@@ -153,7 +157,32 @@ export function AccountClient() {
         ))}
       </div>
 
-      <label className="mt-6 block">
+      {mode === "register" ? (
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-sm font-semibold text-ink">First name</span>
+            <input
+              value={firstName}
+              onChange={(event) => setFirstName(event.target.value)}
+              className="mt-2 w-full rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
+              placeholder="First name"
+              type="text"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold text-ink">Last name</span>
+            <input
+              value={lastName}
+              onChange={(event) => setLastName(event.target.value)}
+              className="mt-2 w-full rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
+              placeholder="Last name"
+              type="text"
+            />
+          </label>
+        </div>
+      ) : null}
+
+      <label className={mode === "register" ? "mt-4 block" : "mt-6 block"}>
         <span className="text-sm font-semibold text-ink">Email</span>
         <input
           value={email}

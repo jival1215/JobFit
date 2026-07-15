@@ -6,7 +6,7 @@ The current product has a Next.js frontend, FastAPI backend, optional Gemini rec
 
 ## Live Links
 
-- Web app: https://jobfit-ebon.vercel.app
+- Web app: https://main.d8rnzmcb1hxs.amplifyapp.com
 - Backend API: https://jobfit-api-production.up.railway.app
 - API health check: https://jobfit-api-production.up.railway.app/api/health
 
@@ -24,7 +24,9 @@ The current product has a Next.js frontend, FastAPI backend, optional Gemini rec
 - Filter by role, location, company, and minimum score.
 - Export ranked results to CSV.
 - Create user accounts and sign in with token-based auth.
+- Store first and last name on signup so the dashboard can greet users by name instead of email.
 - Save uploaded resume records, match runs, recommendations, and user-specific Saved, Applied, and Skipped jobs.
+- Reuse saved resumes for future scans without uploading the same file again.
 - Use local SQLite for development or Supabase for hosted account/resume/recommendation storage.
 - Optionally encrypt stored resume files and extracted resume text with `JOBFIT_ENCRYPTION_KEY`.
 - Optional Gemini recruiter review that reranks the strongest candidates and enhances recommendation text.
@@ -70,15 +72,26 @@ python3 -m unittest discover -s tests
 ## Project Structure
 
 ```text
-jobfit_simplify_mvp/
+JobFit/
+  backend_api.py
   app.py
+  frontend/
+    app/
+    components/
+    lib/
   simplify_fetcher.py
   resume_utils.py
   matcher.py
   skills.py
-  saved_jobs.py
   jobfit_db.py
+  supabase_store.py
+  gemini_recommender.py
+  docs/
+    supabase-schema.sql
+    aws-deployment.md
+  saved_jobs.py
   requirements.txt
+  requirements-api.txt
   README.md
   tests/
     test_matcher.py

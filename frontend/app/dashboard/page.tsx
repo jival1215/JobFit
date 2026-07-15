@@ -7,18 +7,21 @@ import { jobMatches, stats } from "@/lib/mock-data";
 export default function DashboardPage() {
   return (
     <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-      <div className="rounded-3xl bg-ink p-8 text-white shadow-soft">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-200">Dashboard</p>
-        <div className="mt-4 flex flex-col justify-between gap-6 md:flex-row md:items-end">
-          <div>
-            <h1 className="text-4xl font-black tracking-tight sm:text-5xl">Your job search command center.</h1>
+      <div className="overflow-hidden rounded-[2rem] border border-line bg-white shadow-soft">
+        <div className="grid gap-0 lg:grid-cols-[1.1fr_.9fr]">
+          <div className="bg-ink p-8 text-white sm:p-10">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-300">Dashboard</p>
+            <h1 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl">Your job search command center.</h1>
             <p className="mt-4 max-w-2xl text-slate-300">
-              Run a scan, review your ranked matches, filter opportunities, and open feedback for each job from one place.
+              Reuse saved resumes, review ranked matches, track saved jobs, and open role-specific feedback from one focused workspace.
             </p>
           </div>
-          <Link href="/upload" className="rounded-full bg-white px-5 py-3 text-sm font-bold text-ink hover:bg-blue-50">
-            Run new scan
-          </Link>
+          <div className="flex flex-col justify-center gap-4 p-8 sm:p-10">
+            <p className="text-sm leading-6 text-slateSoft">Run a fresh scan from an uploaded file or one of your stored resumes.</p>
+            <Link href="/upload" className="inline-flex w-fit rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white hover:bg-brand-700">
+              Run scan
+            </Link>
+          </div>
         </div>
       </div>
 

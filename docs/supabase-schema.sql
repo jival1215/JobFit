@@ -5,6 +5,8 @@
 create table if not exists public.jobfit_users (
   id bigserial primary key,
   email text not null unique,
+  first_name text not null default '',
+  last_name text not null default '',
   password_hash text not null,
   created_at timestamptz not null default now()
 );

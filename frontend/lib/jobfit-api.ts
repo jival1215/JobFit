@@ -1,6 +1,6 @@
 import type { JobMatch } from "./mock-data";
 
-export type User = { id: number; email: string; createdAt: string };
+export type User = { id: number; email: string; firstName?: string; lastName?: string; displayName?: string; createdAt: string };
 
 export type AuthResponse = { token: string; user: User };
 
@@ -79,11 +79,24 @@ export async function rankResume(formData: FormData): Promise<RankResponse> {
   return parseOrThrow(response, "Unable to rank resume");
 }
 
-export async function registerAccount(email: string, password: string): Promise<AuthResponse> {
+export async function rankSavedResume(
+  resumeId: number,
+  payload: { source: string; preferred_roles: string[]; preferred_locations: string; use_ai_recommendations: boolean }
+): Promise<RankResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/rank/resume/${resumeId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload)
+  });
+
+  return parseOrThrow(response, "Unable to rank saved resume");
+}
+
+export async function registerAccount(email: string, password: string, firstName = "", lastName = ""): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password, firstName, lastName })
   });
   return parseOrThrow(response, "Unable to create account");
 }

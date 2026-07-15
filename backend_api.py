@@ -322,7 +322,12 @@ def _records_from_ranked(ranked: pd.DataFrame, resume_text: str = "") -> list[di
 @app.post("/api/auth/register")
 def register(payload: dict[str, Any]) -> dict[str, Any]:
     try:
-        user = create_user(str(payload.get("email", "")), str(payload.get("password", "")))
+        user = create_user(
+            str(payload.get("email", "")),
+            str(payload.get("password", "")),
+            str(payload.get("firstName") or payload.get("first_name") or ""),
+            str(payload.get("lastName") or payload.get("last_name") or ""),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     token = create_session(int(user["id"]))
@@ -439,41 +444,29 @@ def sources() -> dict[str, list[str]]:
     return {"sources": list(JOB_SOURCES.keys())}
 
 
-@app.post("/api/rank")
-async def rank_resume(
-    resume: UploadFile = File(...),
-    source: str = Form("Summer internships"),
-    preferred_roles: str = Form('["data","data science","data engineering","ai/ml"]'),
-    preferred_locations: str = Form("remote, nyc, new york, new jersey, nj, philadelphia, pa, united states, usa"),
-    use_ai_recommendations: bool = Form(False),
-    authorization: str | None = Header(default=None),
+def _parse_role_values(preferred_roles: str | list[Any]) -> list[str]:
+    if isinstance(preferred_roles, list):
+        return [str(item).strip() for item in preferred_roles if str(item).strip()]
+    try:
+        role_values = json.loads(preferred_roles)
+        if isinstance(role_values, list):
+            return [str(item).strip() for item in role_values if str(item).strip()]
+    except json.JSONDecodeError:
+        pass
+    return [item.strip() for item in str(preferred_roles or "").split(",") if item.strip()]
+
+
+def _rank_resume_text(
+    resume_text: str,
+    source: str,
+    role_values: list[str],
+    location_values: list[str],
+    use_ai_recommendations: bool,
+    user: dict[str, Any] | None,
+    stored_resume: dict[str, Any] | None,
 ) -> dict[str, Any]:
     if source not in JOB_SOURCES:
         raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
-
-    try:
-        role_values = json.loads(preferred_roles)
-        if not isinstance(role_values, list):
-            role_values = []
-    except json.JSONDecodeError:
-        role_values = []
-
-    location_values = [item.strip() for item in preferred_locations.split(",") if item.strip()]
-    data = await resume.read()
-    resume_text = extract_resume_text(UploadedResume(resume.filename or "resume", data))
-    if not resume_text:
-        raise HTTPException(status_code=422, detail="Could not extract text from resume")
-
-    user = _optional_user(authorization)
-    stored_resume = None
-    if user:
-        stored_resume = save_resume_record(
-            int(user["id"]),
-            resume.filename or "resume",
-            resume.content_type or "application/octet-stream",
-            data,
-            resume_text,
-        )
 
     source_url = JOB_SOURCES[source]
     fetched_at = datetime.now(timezone.utc).isoformat()
@@ -501,7 +494,6 @@ async def rank_resume(
         ranked = merge_statuses(ranked, load_statuses())
 
     records = _records_from_ranked(ranked, resume_text)
-    match_run_id = None
     if user:
         statuses = saved_status_map(int(user["id"]))
         for job in records:
@@ -527,15 +519,67 @@ async def rank_resume(
         "resume": stored_resume,
         "resumeId": stored_resume["id"] if stored_resume else None,
         "resumeEncryptionEnabled": bool(stored_resume and stored_resume.get("encrypted")),
-        "matchRunId": match_run_id,
+        "matchRunId": None,
     }
     if user:
-        if stored_resume:
-            response_payload["resumeId"] = stored_resume["id"]
         match_run_id = save_match_run(int(user["id"]), response_payload)
         response_payload["matchRunId"] = match_run_id
         response_payload["tracker"] = user_summary(int(user["id"]))
     return response_payload
+
+
+@app.post("/api/rank")
+async def rank_resume(
+    resume: UploadFile = File(...),
+    source: str = Form("Summer internships"),
+    preferred_roles: str = Form('["data","data science","data engineering","ai/ml"]'),
+    preferred_locations: str = Form("remote, nyc, new york, new jersey, nj, philadelphia, pa, united states, usa"),
+    use_ai_recommendations: bool = Form(False),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    role_values = _parse_role_values(preferred_roles)
+    location_values = [item.strip() for item in preferred_locations.split(",") if item.strip()]
+    data = await resume.read()
+    resume_text = extract_resume_text(UploadedResume(resume.filename or "resume", data))
+    if not resume_text:
+        raise HTTPException(status_code=422, detail="Could not extract text from resume")
+
+    user = _optional_user(authorization)
+    stored_resume = None
+    if user:
+        stored_resume = save_resume_record(
+            int(user["id"]),
+            resume.filename or "resume",
+            resume.content_type or "application/octet-stream",
+            data,
+            resume_text,
+        )
+
+    return _rank_resume_text(resume_text, source, role_values, location_values, use_ai_recommendations, user, stored_resume)
+
+
+@app.post("/api/rank/resume/{resume_id}")
+def rank_saved_resume(
+    resume_id: int,
+    payload: dict[str, Any],
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    user = _required_user(authorization)
+    try:
+        stored_resume = get_resume_record(int(user["id"]), resume_id, include_text=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not stored_resume or not str(stored_resume.get("extractedText", "")).strip():
+        raise HTTPException(status_code=404, detail="Saved resume not found")
+
+    source = str(payload.get("source") or "Summer internships")
+    role_values = _parse_role_values(payload.get("preferred_roles") or payload.get("preferredRoles") or [])
+    preferred_locations = str(payload.get("preferred_locations") or payload.get("preferredLocations") or "")
+    location_values = [item.strip() for item in preferred_locations.split(",") if item.strip()]
+    use_ai_recommendations = bool(payload.get("use_ai_recommendations") or payload.get("useAiRecommendations"))
+    resume_text = str(stored_resume.pop("extractedText"))
+
+    return _rank_resume_text(resume_text, source, role_values, location_values, use_ai_recommendations, user, stored_resume)
 
 
 @app.get("/api/tracker")

@@ -93,6 +93,8 @@ def init_db(path: Path | None = None) -> None:
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 email TEXT NOT NULL UNIQUE,
+                first_name TEXT NOT NULL DEFAULT '',
+                last_name TEXT NOT NULL DEFAULT '',
                 password_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
@@ -151,8 +153,14 @@ def init_db(path: Path | None = None) -> None:
             );
             """
         )
-        columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(match_runs)").fetchall()}
-        if "resume_id" not in columns:
+        user_columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "first_name" not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN first_name TEXT NOT NULL DEFAULT ''")
+        if "last_name" not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN last_name TEXT NOT NULL DEFAULT ''")
+
+        match_run_columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(match_runs)").fetchall()}
+        if "resume_id" not in match_run_columns:
             conn.execute("ALTER TABLE match_runs ADD COLUMN resume_id INTEGER REFERENCES resumes(id) ON DELETE SET NULL")
 
 
@@ -180,12 +188,22 @@ def _verify_password(password: str, stored_hash: str) -> bool:
 
 
 def _user_dict(row: sqlite3.Row) -> dict[str, Any]:
-    return {"id": int(row["id"]), "email": str(row["email"]), "createdAt": str(row["created_at"])}
+    first_name = str(row["first_name"] if "first_name" in row.keys() else "").strip()
+    last_name = str(row["last_name"] if "last_name" in row.keys() else "").strip()
+    display_name = " ".join(part for part in [first_name, last_name] if part).strip()
+    return {
+        "id": int(row["id"]),
+        "email": str(row["email"]),
+        "firstName": first_name,
+        "lastName": last_name,
+        "displayName": display_name or str(row["email"]),
+        "createdAt": str(row["created_at"]),
+    }
 
 
-def create_user(email: str, password: str) -> dict[str, Any]:
+def create_user(email: str, password: str, first_name: str = "", last_name: str = "") -> dict[str, Any]:
     if supabase_store.configured():
-        return supabase_store.create_user(email, password)
+        return supabase_store.create_user(email, password, first_name, last_name)
     email = email.strip().lower()
     if not email or "@" not in email:
         raise ValueError("Enter a valid email address")
@@ -195,10 +213,10 @@ def create_user(email: str, password: str) -> dict[str, Any]:
     try:
         with db_connection() as conn:
             cursor = conn.execute(
-                "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-                (email, _hash_password(password), utc_now()),
+                "INSERT INTO users (email, first_name, last_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
+                (email, first_name.strip(), last_name.strip(), _hash_password(password), utc_now()),
             )
-            row = conn.execute("SELECT id, email, created_at FROM users WHERE id = ?", (cursor.lastrowid,)).fetchone()
+            row = conn.execute("SELECT id, email, first_name, last_name, created_at FROM users WHERE id = ?", (cursor.lastrowid,)).fetchone()
     except sqlite3.IntegrityError as exc:
         raise ValueError("An account with this email already exists") from exc
     return _user_dict(row)
@@ -248,7 +266,7 @@ def user_from_token(token: str | None) -> dict[str, Any] | None:
     with db_connection() as conn:
         row = conn.execute(
             """
-            SELECT users.id, users.email, users.created_at, sessions.expires_at
+            SELECT users.id, users.email, users.first_name, users.last_name, users.created_at, sessions.expires_at
             FROM sessions
             JOIN users ON users.id = sessions.user_id
             WHERE sessions.token = ?

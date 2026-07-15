@@ -24,8 +24,9 @@ class JobfitDbTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_user_can_register_login_and_save_match(self):
-        user = jobfit_db.create_user("student@example.com", "password123")
+        user = jobfit_db.create_user("student@example.com", "password123", "Jival", "Patel")
         self.assertEqual(user["email"], "student@example.com")
+        self.assertEqual(user["displayName"], "Jival Patel")
 
         authenticated = jobfit_db.authenticate_user("student@example.com", "password123")
         self.assertIsNotNone(authenticated)

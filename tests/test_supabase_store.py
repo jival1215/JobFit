@@ -26,14 +26,17 @@ class SupabaseStoreTests(unittest.TestCase):
     def test_create_user_uses_prefixed_supabase_tables(self, request):
         request.side_effect = [
             self._response([]),
-            self._response([{"id": 7, "email": "student@example.com", "created_at": "2026-07-10T00:00:00+00:00"}]),
+            self._response([{"id": 7, "email": "student@example.com", "first_name": "Jival", "last_name": "Patel", "created_at": "2026-07-10T00:00:00+00:00"}]),
         ]
 
-        user = supabase_store.create_user("Student@Example.com", "password123")
+        user = supabase_store.create_user("Student@Example.com", "password123", "Jival", "Patel")
 
         self.assertEqual(user["id"], 7)
         self.assertEqual(user["email"], "student@example.com")
+        self.assertEqual(user["displayName"], "Jival Patel")
         self.assertIn("/rest/v1/jobfit_users", request.call_args_list[0].args[1])
+        self.assertEqual(request.call_args_list[1].kwargs["json"]["first_name"], "Jival")
+        self.assertEqual(request.call_args_list[1].kwargs["json"]["last_name"], "Patel")
         self.assertEqual(request.call_args_list[1].kwargs["headers"]["Prefer"], "return=representation")
 
     @patch("supabase_store.requests.request")
