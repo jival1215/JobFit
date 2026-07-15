@@ -63,6 +63,23 @@ class SupabaseStoreTests(unittest.TestCase):
         self.assertEqual(payload["jobs_json"][0]["recommendation"], "Apply")
         self.assertTrue(payload["ai_enabled"])
 
+    @patch("supabase_store.requests.request")
+    def test_job_cache_is_saved_to_supabase(self, request):
+        request.return_value = self._response([])
+
+        result = supabase_store.save_job_cache(
+            "Jobright software new grad",
+            "https://example.com/jobs.md",
+            "2026-07-15T00:00:00+00:00",
+            [{"company": "Example", "role": "Software Engineer"}],
+        )
+
+        self.assertEqual(result["jobCount"], 1)
+        self.assertIn("/rest/v1/jobfit_job_cache", request.call_args_list[0].args[1])
+        payload = request.call_args_list[1].kwargs["json"]
+        self.assertEqual(payload["source_name"], "Jobright software new grad")
+        self.assertEqual(payload["jobs_json"][0]["company"], "Example")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 import unittest
 
-from simplify_fetcher import parse_simplify_jobs
+from simplify_fetcher import parse_job_postings, parse_jobright_jobs, parse_simplify_jobs
 
 
 class SimplifyFetcherTests(unittest.TestCase):
@@ -49,6 +49,29 @@ class SimplifyFetcherTests(unittest.TestCase):
         jobs = parse_simplify_jobs(markdown)
         self.assertEqual(len(jobs), 1)
         self.assertEqual(jobs.loc[0, "application_link"], "https://simplify.jobs/p/campbells-agentic-ai")
+
+    def test_parse_jobright_markdown_table(self):
+        markdown = """
+## Daily Job List
+| Company | Job Title | Location | Work Model | Date Posted |
+| ----- | --------- | -------- | ---- | ------- |
+| **[CodeVertex Innovations](https://codevertexinnovations.com/)** | **[Entry-Level Data Analyst](https://jobright.ai/jobs/info/123)** | United States | Remote | Jul 08 |
+| ↳ | **[Junior Data Analyst](https://jobright.ai/jobs/info/456)** | New York, NY | Hybrid | Jul 07 |
+"""
+        jobs = parse_jobright_jobs(markdown, "Jobright data new grad")
+        self.assertEqual(len(jobs), 2)
+        self.assertEqual(jobs.loc[0, "company"], "CodeVertex Innovations")
+        self.assertEqual(jobs.loc[1, "company"], "CodeVertex Innovations")
+        self.assertEqual(jobs.loc[0, "role"], "Entry-Level Data Analyst")
+        self.assertEqual(jobs.loc[0, "application_link"], "https://jobright.ai/jobs/info/123")
+        self.assertIn("Remote", jobs.loc[0, "location"])
+        self.assertEqual(jobs.loc[0, "age"], "Jul 08")
+
+    def test_parse_job_postings_falls_back_to_jobright(self):
+        markdown = "| Company | Job Title | Location | Work Model | Date Posted | | ----- | --------- | -------- | ---- | ------- | | **[Acme](https://example.com)** | **[Software Engineer](https://jobright.ai/jobs/info/abc)** | Remote | Remote | Jul 08 |"
+        jobs = parse_job_postings(markdown, "Jobright software new grad")
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs.loc[0, "role"], "Software Engineer")
 
 
 if __name__ == "__main__":

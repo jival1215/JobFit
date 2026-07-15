@@ -128,6 +128,18 @@ class JobfitDbTests(unittest.TestCase):
         stored = jobfit_db.get_resume_record(user["id"], resume["id"], include_text=True)
         self.assertEqual(stored["extractedText"], "private resume text")
 
+    def test_job_cache_round_trips_source_jobs(self):
+        cached = jobfit_db.save_job_cache(
+            "Jobright data new grad",
+            "https://example.com/jobs.md",
+            "2026-07-15T00:00:00+00:00",
+            [{"company": "Example", "role": "Data Analyst", "location": "Remote", "application_link": "https://example.com/apply", "age": "Jul 15", "category": "Data", "source": "Jobright data new grad"}],
+        )
+        self.assertEqual(cached["jobCount"], 1)
+        loaded = jobfit_db.get_job_cache("Jobright data new grad")
+        self.assertEqual(loaded["jobs"][0]["company"], "Example")
+        self.assertEqual(jobfit_db.job_cache_summary()[0]["jobCount"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

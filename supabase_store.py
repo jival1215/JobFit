@@ -389,3 +389,57 @@ def user_summary(user_id: int) -> dict[str, int]:
     summary["Match runs"] = len(_request("GET", "match_runs", params={"select": "id", "user_id": _eq(user_id)}))
     summary["Resumes"] = len(_request("GET", "resumes", params={"select": "id", "user_id": _eq(user_id)}))
     return summary
+
+
+def get_job_cache(source_name: str) -> dict[str, Any] | None:
+    rows = _request("GET", "job_cache", params={"select": "*", "source_name": _eq(source_name), "limit": "1"})
+    if not rows:
+        return None
+    row = rows[0]
+    jobs = row.get("jobs_json") or []
+    if isinstance(jobs, str):
+        try:
+            jobs = json.loads(jobs)
+        except json.JSONDecodeError:
+            jobs = []
+    return {
+        "sourceName": str(row.get("source_name") or source_name),
+        "sourceUrl": str(row.get("source_url") or ""),
+        "fetchedAt": str(row.get("fetched_at") or ""),
+        "jobCount": int(row.get("job_count") or 0),
+        "jobs": jobs if isinstance(jobs, list) else [],
+        "updatedAt": str(row.get("updated_at") or ""),
+    }
+
+
+def save_job_cache(source_name: str, source_url: str, fetched_at: str, jobs: list[dict[str, Any]]) -> dict[str, Any]:
+    now = utc_now()
+    _request("DELETE", "job_cache", params={"source_name": _eq(source_name)})
+    _request(
+        "POST",
+        "job_cache",
+        payload={
+            "source_name": source_name,
+            "source_url": source_url,
+            "fetched_at": fetched_at,
+            "job_count": len(jobs),
+            "jobs_json": jobs,
+            "updated_at": now,
+        },
+        prefer="return=minimal",
+    )
+    return {"sourceName": source_name, "sourceUrl": source_url, "fetchedAt": fetched_at, "jobCount": len(jobs), "jobs": jobs, "updatedAt": now}
+
+
+def job_cache_summary() -> list[dict[str, Any]]:
+    rows = _request("GET", "job_cache", params={"select": "source_name,source_url,fetched_at,job_count,updated_at", "order": "source_name.asc"})
+    return [
+        {
+            "sourceName": str(row.get("source_name") or ""),
+            "sourceUrl": str(row.get("source_url") or ""),
+            "fetchedAt": str(row.get("fetched_at") or ""),
+            "jobCount": int(row.get("job_count") or 0),
+            "updatedAt": str(row.get("updated_at") or ""),
+        }
+        for row in rows
+    ]

@@ -14,8 +14,9 @@ The current product has a Next.js frontend, FastAPI backend, optional Gemini rec
 
 - Upload resumes as PDF, DOCX, or TXT.
 - Extract resume text locally.
-- Fetch postings from the SimplifyJobs Summer 2026 internships repo.
-- Parse changing GitHub markdown/HTML job tables.
+- Fetch postings from SimplifyJobs and Jobright GitHub job repositories.
+- Parse changing GitHub markdown/HTML job tables, including Simplify HTML tables and Jobright markdown tables.
+- Cache parsed job postings in SQLite or Supabase so resume scans can rank from stored rows instead of re-fetching every repo each time.
 - Extract company, role, location, application link, age, and category.
 - Rank jobs using keyword similarity, skill overlap, role title fit, location preference, and posting freshness.
 - Show Top 10 Apply First jobs.
@@ -101,13 +102,20 @@ JobFit/
 
 ## Notes
 
-The default source is:
+The default product source is `All job repos`, which combines these GitHub-backed feeds:
 
 ```text
-https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README.md
+SimplifyJobs/Summer2026-Internships README.md
+SimplifyJobs/Summer2026-Internships README-Off-Season.md
+SimplifyJobs/New-Grad-Positions README.md
+jobright-ai/2026-Data-Analysis-New-Grad README.md
+jobright-ai/2026-Software-Engineer-New-Grad README.md
+jobright-ai/2026-Product-Management-Internship README.md
+jobright-ai/2026-Software-Engineer-Internship README.md
+jobright-ai/2026-Public-Sector-Internship README.md
 ```
 
-You can paste another compatible SimplifyJobs raw README URL in the sidebar, such as an off-season or new-grad list.
+The backend caches parsed postings per source in `job_cache` / `jobfit_job_cache`. Set `JOBFIT_JOB_CACHE_TTL_MINUTES` to control refresh frequency. The default is 360 minutes.
 
 ## Deployment
 
@@ -122,12 +130,13 @@ See `docs/aws-deployment.md` for the ECS Express Mode and Amplify deployment che
 
 ### Railway + Supabase
 
-Railway can host the FastAPI backend from this repo using `nixpacks.toml` and `requirements-api.txt`. Supabase can store accounts, sessions, resume records, match runs, saved jobs, and recommendation payloads. Run `docs/supabase-schema.sql` in the Supabase SQL editor, then set these Railway variables:
+Railway can host the FastAPI backend from this repo using `nixpacks.toml` and `requirements-api.txt`. Supabase can store accounts, sessions, resume records, match runs, saved jobs, cached job postings, and recommendation payloads. Run `docs/supabase-schema.sql` in the Supabase SQL editor, then set these Railway variables:
 
 ```bash
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 SUPABASE_TABLE_PREFIX=jobfit_
+JOBFIT_JOB_CACHE_TTL_MINUTES=360
 JOBFIT_ENCRYPTION_KEY=your_fernet_key
 GEMINI_API_KEY=your_gemini_key
 ENABLE_GEMINI_RECOMMENDATIONS=true

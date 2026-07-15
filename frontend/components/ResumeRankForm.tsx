@@ -7,12 +7,22 @@ import { fetchAccount, getAuthToken, rankResume, rankSavedResume, type AccountRe
 import { UploadBox } from "./UploadBox";
 
 const roleOptions = ["data", "data science", "data engineering", "ai/ml", "software"];
-const sourceOptions = ["Summer internships", "Fall internships", "Full time"];
+const sourceOptions = [
+  "All job repos",
+  "Summer internships",
+  "Fall internships",
+  "Full time",
+  "Jobright data new grad",
+  "Jobright software new grad",
+  "Jobright product internships",
+  "Jobright software internships",
+  "Jobright public sector internships"
+];
 
 export function ResumeRankForm() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
-  const [source, setSource] = useState("Summer internships");
+  const [source, setSource] = useState("All job repos");
   const [locations, setLocations] = useState("Remote, NYC, New Jersey");
   const [roles, setRoles] = useState(["data", "data science", "data engineering", "ai/ml"]);
   const [useAiRecommendations, setUseAiRecommendations] = useState(false);

@@ -64,6 +64,16 @@ create table if not exists public.jobfit_saved_matches (
   unique (user_id, job_id)
 );
 
+
+create table if not exists public.jobfit_job_cache (
+  source_name text primary key,
+  source_url text not null,
+  fetched_at text not null,
+  job_count integer not null default 0,
+  jobs_json jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists jobfit_sessions_user_id_idx on public.jobfit_sessions(user_id);
 create index if not exists jobfit_resumes_user_id_idx on public.jobfit_resumes(user_id);
 create index if not exists jobfit_match_runs_user_id_idx on public.jobfit_match_runs(user_id);

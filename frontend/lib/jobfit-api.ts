@@ -12,6 +12,8 @@ export type AccountResponse = {
   matchRuns: Array<Record<string, unknown>>;
   resumes?: ResumeRecord[];
   resumeEncryptionEnabled?: boolean;
+  usedJobCache?: boolean;
+  jobCacheTtlMinutes?: number;
 };
 
 export type SavedMatchesResponse = { jobs: JobMatch[]; summary: Record<string, number> };
@@ -34,6 +36,8 @@ export type RankResponse = {
   resume?: ResumeRecord | null;
   resumeId?: number | null;
   resumeEncryptionEnabled?: boolean;
+  usedJobCache?: boolean;
+  jobCacheTtlMinutes?: number;
 };
 
 export const API_BASE_URL =

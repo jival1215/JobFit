@@ -22,10 +22,13 @@ from jobfit_db import (
     delete_saved_match,
     delete_session,
     encryption_enabled,
+    get_job_cache,
     get_resume_record,
+    job_cache_summary,
     list_match_runs,
     list_resumes,
     list_saved_matches,
+    save_job_cache,
     save_match_run,
     save_resume_record,
     save_user_match,
@@ -37,7 +40,7 @@ from jobfit_db import (
 from matcher import rank_jobs
 from resume_utils import extract_resume_text
 from saved_jobs import load_statuses, merge_statuses, save_job_status, tracker_summary
-from simplify_fetcher import JOB_SOURCES, fetch_markdown, parse_simplify_jobs
+from simplify_fetcher import ALL_JOB_REPOS_SOURCE, JOB_SOURCES, fetch_markdown, parse_job_postings
 
 
 app = FastAPI(title="JobFIT API", version="0.1.0")
@@ -423,6 +426,31 @@ def remove_saved_match(job_id: str, authorization: str | None = Header(default=N
     return {"status": "deleted", "summary": user_summary(int(user["id"]))}
 
 
+@app.get("/api/job-sources")
+def job_sources() -> dict[str, Any]:
+    return {
+        "defaultSource": ALL_JOB_REPOS_SOURCE,
+        "sources": [ALL_JOB_REPOS_SOURCE, *JOB_SOURCES.keys()],
+        "cache": job_cache_summary(),
+        "cacheTtlMinutes": _cache_ttl_minutes(),
+    }
+
+
+@app.post("/api/job-cache/refresh")
+def refresh_job_cache(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
+    source = str(payload.get("source") or ALL_JOB_REPOS_SOURCE)
+    jobs, source_url, fetched_at, used_cache = _load_jobs_for_source(source, force_refresh=True)
+    return {
+        "source": source,
+        "sourceUrl": source_url,
+        "fetchedAt": fetched_at,
+        "count": int(len(jobs)),
+        "usedJobCacheFallback": bool(used_cache),
+        "cache": job_cache_summary(),
+    }
+
+
 @app.get("/")
 def root() -> dict[str, Any]:
     return {
@@ -441,7 +469,7 @@ def health() -> dict[str, str]:
 
 @app.get("/api/sources")
 def sources() -> dict[str, list[str]]:
-    return {"sources": list(JOB_SOURCES.keys())}
+    return {"sources": [ALL_JOB_REPOS_SOURCE, *JOB_SOURCES.keys()]}
 
 
 def _parse_role_values(preferred_roles: str | list[Any]) -> list[str]:
@@ -456,6 +484,106 @@ def _parse_role_values(preferred_roles: str | list[Any]) -> list[str]:
     return [item.strip() for item in str(preferred_roles or "").split(",") if item.strip()]
 
 
+def _cache_ttl_minutes() -> int:
+    return int(os.getenv("JOBFIT_JOB_CACHE_TTL_MINUTES", "360") or 360)
+
+
+def _parse_cached_time(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _cache_is_fresh(record: dict[str, Any] | None) -> bool:
+    if not record:
+        return False
+    ttl = _cache_ttl_minutes()
+    if ttl <= 0:
+        return False
+    fetched_at = _parse_cached_time(str(record.get("fetchedAt") or record.get("updatedAt") or ""))
+    if not fetched_at:
+        return False
+    age_seconds = (datetime.now(timezone.utc) - fetched_at).total_seconds()
+    return age_seconds <= ttl * 60
+
+
+def _jobs_frame_from_records(records: list[dict[str, Any]], source_name: str) -> pd.DataFrame:
+    frame = pd.DataFrame(records)
+    expected = ["company", "role", "location", "application_link", "age", "category", "source"]
+    for column in expected:
+        if column not in frame.columns:
+            frame[column] = ""
+    if not frame.empty:
+        frame["source"] = frame["source"].replace("", source_name).fillna(source_name)
+    return frame[expected]
+
+
+def _source_rows_for_cache(frame: pd.DataFrame, source_name: str) -> list[dict[str, Any]]:
+    if frame.empty:
+        return []
+    cached = frame.copy().fillna("")
+    cached["source"] = source_name
+    return cached.to_dict(orient="records")
+
+
+def _load_single_source_jobs(source_name: str, force_refresh: bool = False) -> tuple[pd.DataFrame, str, str, bool]:
+    if source_name not in JOB_SOURCES:
+        raise HTTPException(status_code=400, detail=f"Unknown source: {source_name}")
+    source_url = JOB_SOURCES[source_name]
+    cached = get_job_cache(source_name)
+    if cached and not force_refresh and _cache_is_fresh(cached):
+        return _jobs_frame_from_records(cached.get("jobs", []), source_name), source_url, str(cached.get("fetchedAt", "")), True
+
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    try:
+        markdown = fetch_markdown(source_url)
+        parsed = parse_job_postings(markdown, source_name)
+        parsed["source"] = source_name
+        rows = _source_rows_for_cache(parsed, source_name)
+        save_job_cache(source_name, source_url, fetched_at, rows)
+        return _jobs_frame_from_records(rows, source_name), source_url, fetched_at, False
+    except Exception as exc:
+        if cached:
+            stale_frame = _jobs_frame_from_records(cached.get("jobs", []), source_name)
+            return stale_frame, source_url, str(cached.get("fetchedAt", "")), True
+        raise HTTPException(status_code=502, detail=f"Could not load jobs from {source_name}: {exc}") from exc
+
+
+def _load_jobs_for_source(source: str, force_refresh: bool = False) -> tuple[pd.DataFrame, str, str, bool]:
+    if source == ALL_JOB_REPOS_SOURCE:
+        frames: list[pd.DataFrame] = []
+        urls: list[str] = []
+        fetched_values: list[str] = []
+        used_cache = False
+        errors: list[str] = []
+        for source_name in JOB_SOURCES:
+            try:
+                frame, url, fetched_at, source_used_cache = _load_single_source_jobs(source_name, force_refresh)
+            except HTTPException as exc:
+                errors.append(f"{source_name}: {exc.detail}")
+                continue
+            if not frame.empty:
+                frames.append(frame)
+            urls.append(url)
+            if fetched_at:
+                fetched_values.append(fetched_at)
+            used_cache = used_cache or source_used_cache
+        if not frames and errors:
+            raise HTTPException(status_code=502, detail="Could not load any job source: " + "; ".join(errors))
+        combined = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["company", "role", "location", "application_link", "age", "category", "source"])
+        if not combined.empty:
+            combined = combined.drop_duplicates(subset=["company", "role", "location", "application_link"]).reset_index(drop=True)
+        return combined, ",".join(urls), max(fetched_values) if fetched_values else datetime.now(timezone.utc).isoformat(), used_cache
+
+    if source not in JOB_SOURCES:
+        raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
+    return _load_single_source_jobs(source, force_refresh)
+
+
 def _rank_resume_text(
     resume_text: str,
     source: str,
@@ -465,14 +593,7 @@ def _rank_resume_text(
     user: dict[str, Any] | None,
     stored_resume: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    if source not in JOB_SOURCES:
-        raise HTTPException(status_code=400, detail=f"Unknown source: {source}")
-
-    source_url = JOB_SOURCES[source]
-    fetched_at = datetime.now(timezone.utc).isoformat()
-    markdown = fetch_markdown(source_url)
-    jobs = parse_simplify_jobs(markdown)
-    jobs["source"] = source
+    jobs, source_url, fetched_at, used_job_cache = _load_jobs_for_source(source)
     jobs = mark_new_jobs(jobs, source)
     ranked = rank_jobs(resume_text, jobs, role_values, location_values)
     ai_recruiter_rerank_enabled = bool(use_ai_recommendations and gemini_enabled())
@@ -508,6 +629,8 @@ def _rank_resume_text(
         "fetchedAt": fetched_at,
         "count": int(len(ranked)),
         "newCount": int(ranked.get("is_new", pd.Series(False, index=ranked.index)).sum()),
+        "usedJobCache": bool(used_job_cache),
+        "jobCacheTtlMinutes": _cache_ttl_minutes(),
         "aiRecommendationsRequested": bool(use_ai_recommendations),
         "aiRecommendationsEnabled": bool(use_ai_recommendations and gemini_enabled()),
         "aiRecruiterRerankEnabled": ai_recruiter_rerank_enabled,

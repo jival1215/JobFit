@@ -151,6 +151,15 @@ def init_db(path: Path | None = None) -> None:
                 updated_at TEXT NOT NULL,
                 UNIQUE(user_id, job_id)
             );
+
+            CREATE TABLE IF NOT EXISTS job_cache (
+                source_name TEXT PRIMARY KEY,
+                source_url TEXT NOT NULL,
+                fetched_at TEXT NOT NULL,
+                job_count INTEGER NOT NULL DEFAULT 0,
+                jobs_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             """
         )
         user_columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(users)").fetchall()}
@@ -555,6 +564,70 @@ def delete_saved_match(user_id: int, job_id: str) -> None:
     init_db()
     with db_connection() as conn:
         conn.execute("DELETE FROM saved_matches WHERE user_id = ? AND job_id = ?", (user_id, job_id))
+
+
+def get_job_cache(source_name: str) -> dict[str, Any] | None:
+    if supabase_store.configured():
+        return supabase_store.get_job_cache(source_name)
+    init_db()
+    with db_connection() as conn:
+        row = conn.execute("SELECT * FROM job_cache WHERE source_name = ?", (source_name,)).fetchone()
+    if not row:
+        return None
+    try:
+        jobs = json.loads(str(row["jobs_json"]))
+    except json.JSONDecodeError:
+        jobs = []
+    return {
+        "sourceName": str(row["source_name"]),
+        "sourceUrl": str(row["source_url"]),
+        "fetchedAt": str(row["fetched_at"]),
+        "jobCount": int(row["job_count"]),
+        "jobs": jobs if isinstance(jobs, list) else [],
+        "updatedAt": str(row["updated_at"]),
+    }
+
+
+def save_job_cache(source_name: str, source_url: str, fetched_at: str, jobs: list[dict[str, Any]]) -> dict[str, Any]:
+    if supabase_store.configured():
+        return supabase_store.save_job_cache(source_name, source_url, fetched_at, jobs)
+    init_db()
+    now = utc_now()
+    with db_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO job_cache (source_name, source_url, fetched_at, job_count, jobs_json, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(source_name) DO UPDATE SET
+                source_url = excluded.source_url,
+                fetched_at = excluded.fetched_at,
+                job_count = excluded.job_count,
+                jobs_json = excluded.jobs_json,
+                updated_at = excluded.updated_at
+            """,
+            (source_name, source_url, fetched_at, len(jobs), json.dumps(jobs), now),
+        )
+    return {"sourceName": source_name, "sourceUrl": source_url, "fetchedAt": fetched_at, "jobCount": len(jobs), "jobs": jobs, "updatedAt": now}
+
+
+def job_cache_summary() -> list[dict[str, Any]]:
+    if supabase_store.configured():
+        return supabase_store.job_cache_summary()
+    init_db()
+    with db_connection() as conn:
+        rows = conn.execute(
+            "SELECT source_name, source_url, fetched_at, job_count, updated_at FROM job_cache ORDER BY source_name"
+        ).fetchall()
+    return [
+        {
+            "sourceName": str(row["source_name"]),
+            "sourceUrl": str(row["source_url"]),
+            "fetchedAt": str(row["fetched_at"]),
+            "jobCount": int(row["job_count"]),
+            "updatedAt": str(row["updated_at"]),
+        }
+        for row in rows
+    ]
 
 
 def user_summary(user_id: int) -> dict[str, int]:
