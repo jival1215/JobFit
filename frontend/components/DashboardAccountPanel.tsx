@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   fetchAccount,
+  getAuthToken,
   loginAccount,
   logoutAccount,
   registerAccount,
@@ -18,15 +19,24 @@ export function DashboardAccountPanel({ compact = false }: { compact?: boolean }
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [account, setAccount] = useState<AccountResponse | null>(null);
+  const [hasCheckedAccount, setHasCheckedAccount] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function loadAccount() {
+    if (!getAuthToken()) {
+      setAccount(null);
+      setHasCheckedAccount(true);
+      return;
+    }
+
     try {
       setAccount(await fetchAccount());
       setError("");
     } catch {
       setAccount(null);
+    } finally {
+      setHasCheckedAccount(true);
     }
   }
 
@@ -40,7 +50,9 @@ export function DashboardAccountPanel({ compact = false }: { compact?: boolean }
     try {
       const result = mode === "register" ? await registerAccount(email, password, firstName, lastName) : await loginAccount(email, password);
       setAuthToken(result.token);
+      setHasCheckedAccount(false);
       setAccount(await fetchAccount());
+      setHasCheckedAccount(true);
       setPassword("");
       setFirstName("");
       setLastName("");
@@ -55,6 +67,22 @@ export function DashboardAccountPanel({ compact = false }: { compact?: boolean }
     await logoutAccount();
     clearAuthToken();
     setAccount(null);
+    setHasCheckedAccount(true);
+  }
+
+  if (!hasCheckedAccount) {
+    return (
+      <section className={`${compact ? "" : "mt-8"} rounded-3xl border border-line bg-white p-6 shadow-sm`}>
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+          <div className="flex-1">
+            <div className="h-4 w-24 animate-pulse rounded-full bg-brand-100" />
+            <div className="mt-4 h-8 w-2/3 animate-pulse rounded-2xl bg-slate-100" />
+            <div className="mt-3 h-4 w-full max-w-xl animate-pulse rounded-full bg-slate-100" />
+          </div>
+          <div className="h-12 w-28 animate-pulse rounded-full bg-slate-100" />
+        </div>
+      </section>
+    );
   }
 
   if (account) {

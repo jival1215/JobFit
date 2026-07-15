@@ -12,6 +12,7 @@ type MatchesClientProps = {
 
 export function MatchesClient({ fallbackJobs }: MatchesClientProps) {
   const [ranked, setRanked] = useState<RankResponse | null>(null);
+  const [hasLoadedSavedResults, setHasLoadedSavedResults] = useState(false);
   const [role, setRole] = useState("");
   const [location, setLocation] = useState("");
   const [company, setCompany] = useState("");
@@ -21,8 +22,13 @@ export function MatchesClient({ fallbackJobs }: MatchesClientProps) {
   useEffect(() => {
     const saved = window.localStorage.getItem("jobfit:ranked-results");
     if (saved) {
-      setRanked(JSON.parse(saved) as RankResponse);
+      try {
+        setRanked(JSON.parse(saved) as RankResponse);
+      } catch {
+        setRanked(null);
+      }
     }
+    setHasLoadedSavedResults(true);
   }, []);
 
   const jobs = ranked?.jobs ?? fallbackJobs;
@@ -42,6 +48,32 @@ export function MatchesClient({ fallbackJobs }: MatchesClientProps) {
       return matchesRole && matchesLocation && matchesCompany && matchesType && matchesScore;
     });
   }, [jobs, role, location, company, jobType, minimum]);
+
+  if (!hasLoadedSavedResults) {
+    return (
+      <section className="rounded-[2rem] border border-line bg-white p-6 shadow-sm">
+        <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
+          <div className="max-w-2xl">
+            <div className="h-4 w-36 animate-pulse rounded-full bg-brand-100" />
+            <div className="mt-5 h-12 w-3/4 animate-pulse rounded-2xl bg-slate-100" />
+            <div className="mt-4 h-4 w-full animate-pulse rounded-full bg-slate-100" />
+            <div className="mt-3 h-4 w-2/3 animate-pulse rounded-full bg-slate-100" />
+          </div>
+          <div className="h-20 w-full animate-pulse rounded-2xl bg-slate-100 md:w-64" />
+        </div>
+        <div className="mt-8 grid gap-3 md:grid-cols-5">
+          {["Role", "Location", "Company", "Type", "Score"].map((item) => (
+            <div key={item} className="h-12 animate-pulse rounded-2xl bg-slate-100" />
+          ))}
+        </div>
+        <div className="mt-8 grid gap-5 lg:grid-cols-2">
+          {[1, 2, 3, 4].map((item) => (
+            <div key={item} className="h-64 animate-pulse rounded-3xl bg-slate-100" />
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <>

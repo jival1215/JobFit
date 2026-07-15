@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   clearAuthToken,
   fetchAccount,
+  getAuthToken,
   loginAccount,
   logoutAccount,
   registerAccount,
@@ -19,15 +20,24 @@ export function AccountClient() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [account, setAccount] = useState<AccountResponse | null>(null);
+  const [hasCheckedAccount, setHasCheckedAccount] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function loadAccount() {
+    if (!getAuthToken()) {
+      setAccount(null);
+      setHasCheckedAccount(true);
+      return;
+    }
+
     try {
       setAccount(await fetchAccount());
       setError("");
     } catch {
       setAccount(null);
+    } finally {
+      setHasCheckedAccount(true);
     }
   }
 
@@ -41,7 +51,9 @@ export function AccountClient() {
     try {
       const result = mode === "register" ? await registerAccount(email, password, firstName, lastName) : await loginAccount(email, password);
       setAuthToken(result.token);
+      setHasCheckedAccount(false);
       setAccount(await fetchAccount());
+      setHasCheckedAccount(true);
       setPassword("");
       setFirstName("");
       setLastName("");
@@ -56,6 +68,21 @@ export function AccountClient() {
     await logoutAccount();
     clearAuthToken();
     setAccount(null);
+    setHasCheckedAccount(true);
+  }
+
+  if (!hasCheckedAccount) {
+    return (
+      <section className="mx-auto max-w-xl rounded-3xl border border-line bg-white p-8 shadow-soft">
+        <div className="h-4 w-24 animate-pulse rounded-full bg-brand-100" />
+        <div className="mt-5 h-10 w-3/4 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="mt-4 h-4 w-full animate-pulse rounded-full bg-slate-100" />
+        <div className="mt-3 h-4 w-2/3 animate-pulse rounded-full bg-slate-100" />
+        <div className="mt-8 h-12 animate-pulse rounded-full bg-slate-100" />
+        <div className="mt-6 h-12 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="mt-4 h-12 animate-pulse rounded-2xl bg-slate-100" />
+      </section>
+    );
   }
 
   if (account) {

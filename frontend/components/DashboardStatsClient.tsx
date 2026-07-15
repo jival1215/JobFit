@@ -17,6 +17,7 @@ function averageTopScore(jobs: JobMatch[]) {
 
 export function DashboardStatsClient({ fallbackJobs }: DashboardStatsClientProps) {
   const [ranked, setRanked] = useState<RankResponse | null>(null);
+  const [hasLoadedSavedResults, setHasLoadedSavedResults] = useState(false);
   const [savedCount, setSavedCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export function DashboardStatsClient({ fallbackJobs }: DashboardStatsClientProps
         setRanked(null);
       }
     }
+    setHasLoadedSavedResults(true);
 
     if (getAuthToken()) {
       fetchSavedMatches()
@@ -63,6 +65,16 @@ export function DashboardStatsClient({ fallbackJobs }: DashboardStatsClientProps
     ],
     [applyFirst, jobs, ranked, savedCount]
   );
+
+  if (!hasLoadedSavedResults) {
+    return (
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((item) => (
+          <div key={item} className="h-36 animate-pulse rounded-3xl border border-line bg-white shadow-sm" />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

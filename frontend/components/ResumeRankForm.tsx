@@ -19,17 +19,23 @@ export function ResumeRankForm() {
   const [useAiRecommendations, setUseAiRecommendations] = useState(false);
   const [selectedResumeId, setSelectedResumeId] = useState("new");
   const [account, setAccount] = useState<AccountResponse | null>(null);
+  const [hasCheckedAccount, setHasCheckedAccount] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!getAuthToken()) return;
+    if (!getAuthToken()) {
+      setHasCheckedAccount(true);
+      return;
+    }
+
     fetchAccount()
       .then((result) => {
         setAccount(result);
         if (result.resumes?.[0]) setSelectedResumeId(String(result.resumes[0].id));
       })
-      .catch(() => setAccount(null));
+      .catch(() => setAccount(null))
+      .finally(() => setHasCheckedAccount(true));
   }, []);
 
   const selectedResume = useMemo(() => {
@@ -82,6 +88,28 @@ export function ResumeRankForm() {
     formData.append("preferred_job_types", JSON.stringify(payload.preferred_job_types));
     formData.append("use_ai_recommendations", String(payload.use_ai_recommendations));
     return rankResume(formData);
+  }
+
+  if (!hasCheckedAccount) {
+    return (
+      <div className="overflow-hidden rounded-[2rem] border border-line bg-white shadow-soft">
+        <div className="border-b border-line bg-slate-50/70 p-5 sm:p-6">
+          <div className="h-4 w-36 animate-pulse rounded-full bg-brand-100" />
+          <div className="mt-4 h-8 w-2/3 animate-pulse rounded-2xl bg-slate-100" />
+        </div>
+        <div className="grid gap-0 lg:grid-cols-[.95fr_1.05fr]">
+          <div className="border-b border-line p-5 sm:p-6 lg:border-b-0 lg:border-r">
+            <div className="h-48 animate-pulse rounded-3xl bg-slate-100" />
+          </div>
+          <div className="space-y-4 p-5 sm:p-6">
+            <div className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+            <div className="h-12 animate-pulse rounded-2xl bg-slate-100" />
+            <div className="h-24 animate-pulse rounded-2xl bg-slate-100" />
+            <div className="h-12 animate-pulse rounded-full bg-brand-100" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
