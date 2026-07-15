@@ -40,8 +40,10 @@ export type RankResponse = {
   jobCacheTtlMinutes?: number;
 };
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_JOBFIT_API_URL || "https://jobfit-api-production.up.railway.app";
+const CONFIGURED_API_BASE_URL = process.env.NEXT_PUBLIC_JOBFIT_API_URL?.replace(/\/$/, "") || "";
+const PROXY_API_BASE_URL = "/api/jobfit";
+
+export const API_BASE_URL = CONFIGURED_API_BASE_URL || PROXY_API_BASE_URL;
 export const AUTH_TOKEN_KEY = "jobfit:auth-token";
 
 export function getAuthToken() {
@@ -65,6 +67,19 @@ function authHeaders(token = getAuthToken()): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+async function apiFetch(path: string, init?: RequestInit) {
+  const primaryUrl = `${API_BASE_URL}${path}`;
+
+  try {
+    return await fetch(primaryUrl, init);
+  } catch (error) {
+    if (CONFIGURED_API_BASE_URL && typeof window !== "undefined") {
+      return fetch(`${PROXY_API_BASE_URL}${path}`, init);
+    }
+    throw error;
+  }
+}
+
 async function parseOrThrow(response: Response, fallback: string) {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
@@ -74,7 +89,7 @@ async function parseOrThrow(response: Response, fallback: string) {
 }
 
 export async function rankResume(formData: FormData): Promise<RankResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/rank`, {
+  const response = await apiFetch("/api/rank", {
     method: "POST",
     headers: authHeaders(),
     body: formData
@@ -87,7 +102,7 @@ export async function rankSavedResume(
   resumeId: number,
   payload: { source: string; preferred_roles: string[]; preferred_locations: string; use_ai_recommendations: boolean }
 ): Promise<RankResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/rank/resume/${resumeId}`, {
+  const response = await apiFetch(`/api/rank/resume/${resumeId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(payload)
@@ -97,7 +112,7 @@ export async function rankSavedResume(
 }
 
 export async function registerAccount(email: string, password: string, firstName = "", lastName = ""): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+  const response = await apiFetch("/api/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, firstName, lastName })
@@ -106,7 +121,7 @@ export async function registerAccount(email: string, password: string, firstName
 }
 
 export async function loginAccount(email: string, password: string): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+  const response = await apiFetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password })
@@ -115,22 +130,22 @@ export async function loginAccount(email: string, password: string): Promise<Aut
 }
 
 export async function fetchAccount(): Promise<AccountResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/me`, { headers: authHeaders() });
+  const response = await apiFetch("/api/auth/me", { headers: authHeaders() });
   return parseOrThrow(response, "Unable to load account");
 }
 
 export async function logoutAccount() {
-  await fetch(`${API_BASE_URL}/api/auth/logout`, { method: "POST", headers: authHeaders() }).catch(() => null);
+  await apiFetch("/api/auth/logout", { method: "POST", headers: authHeaders() }).catch(() => null);
   clearAuthToken();
 }
 
 export async function fetchSavedMatches(): Promise<SavedMatchesResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/saved-matches`, { headers: authHeaders() });
+  const response = await apiFetch("/api/saved-matches", { headers: authHeaders() });
   return parseOrThrow(response, "Unable to load saved matches");
 }
 
 export async function saveMatch(job: JobMatch, status = "Saved", notes = "") {
-  const response = await fetch(`${API_BASE_URL}/api/saved-matches`, {
+  const response = await apiFetch("/api/saved-matches", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ job, status, notes })
