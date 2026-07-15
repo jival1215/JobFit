@@ -623,7 +623,9 @@ def _rank_resume_text(
     if not user:
         ranked = merge_statuses(ranked, load_statuses())
 
-    records = _records_from_ranked(ranked, resume_text)
+    max_returned_jobs = max(25, int(os.getenv("JOBFIT_MAX_RETURNED_JOBS", "150") or 150))
+    returned_ranked = ranked.head(max_returned_jobs)
+    records = _records_from_ranked(returned_ranked, resume_text)
     if user:
         statuses = saved_status_map(int(user["id"]))
         for job in records:
@@ -637,6 +639,8 @@ def _rank_resume_text(
         "sourceUrl": source_url,
         "fetchedAt": fetched_at,
         "count": int(len(ranked)),
+        "returnedCount": len(records),
+        "maxReturnedJobs": max_returned_jobs,
         "newCount": int(ranked.get("is_new", pd.Series(False, index=ranked.index)).sum()),
         "usedJobCache": bool(used_job_cache),
         "jobCacheTtlMinutes": _cache_ttl_minutes(),
