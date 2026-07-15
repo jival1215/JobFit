@@ -120,6 +120,11 @@ def recommendation(score: float) -> str:
     return "Skip"
 
 
+def curve_score(raw_score: float) -> float:
+    score = max(0.0, min(100.0, float(raw_score)))
+    return round(score + ((100.0 - score) * 0.25), 1)
+
+
 def _safe_job_text(row: pd.Series) -> str:
     return " ".join(str(row.get(col, "")) for col in ["company", "role", "location", "category", "description", "salary", "source"])
 
@@ -200,7 +205,7 @@ def rank_jobs(
         similarity = softened_similarity(raw_similarity, concept_score, title_score)
 
         weights = scoring_weights()
-        score = (
+        raw_score = (
             weights["similarity"] * similarity
             + weights["skill_overlap"] * skill_overlap
             + weights["title_match"] * title_score
@@ -208,6 +213,7 @@ def rank_jobs(
             + weights["location"] * loc_score
             + weights["freshness"] * fresh_score
         ) * 100
+        score = curve_score(raw_score)
 
         breakdown = {
             "similarity_score": _component_percent(similarity),
@@ -219,7 +225,8 @@ def rank_jobs(
         }
         rows.append(
             {
-                "match_score": round(score, 1),
+                "match_score": score,
+                "raw_match_score": round(raw_score, 1),
                 **breakdown,
                 "score_breakdown": build_score_breakdown(breakdown),
                 "matched_skills": format_skills(matched),

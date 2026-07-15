@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const navItems = [
@@ -21,12 +21,20 @@ function navClass(isActive: boolean, isPending: boolean) {
 
 export function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [pendingHref, setPendingHref] = useState("");
   const pendingItem = navItems.find((item) => item.href === pendingHref);
 
   useEffect(() => {
     setPendingHref("");
   }, [pathname]);
+
+  useEffect(() => {
+    for (const item of navItems) {
+      router.prefetch(item.href);
+    }
+    router.prefetch("/");
+  }, [router]);
 
   useEffect(() => {
     if (!pendingHref) return;
@@ -46,7 +54,7 @@ export function Navbar() {
         </div>
       ) : null}
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        <Link href="/" onClick={() => beginNavigation("/")} className="flex items-center gap-3">
+        <Link href="/" prefetch onClick={() => beginNavigation("/")} className="flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-ink text-sm font-black text-white">
             JF
           </span>
@@ -60,6 +68,7 @@ export function Navbar() {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch
                 onClick={() => beginNavigation(item.href)}
                 aria-current={isActive ? "page" : undefined}
                 className={navClass(isActive, isPending)}
@@ -77,6 +86,7 @@ export function Navbar() {
           ) : null}
           <Link
             href="/account"
+            prefetch
             onClick={() => beginNavigation("/account")}
             className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-ink shadow-sm transition hover:bg-slate-50"
           >
@@ -84,6 +94,7 @@ export function Navbar() {
           </Link>
           <Link
             href="/upload"
+            prefetch
             onClick={() => beginNavigation("/upload")}
             className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
           >

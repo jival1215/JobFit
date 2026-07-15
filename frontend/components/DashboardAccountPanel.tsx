@@ -11,7 +11,7 @@ import {
   type AccountResponse,
 } from "@/lib/jobfit-api";
 
-export function DashboardAccountPanel() {
+export function DashboardAccountPanel({ compact = false }: { compact?: boolean }) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -60,7 +60,7 @@ export function DashboardAccountPanel() {
   if (account) {
     const summary = account.summary ?? {};
     return (
-      <section className="mt-8 rounded-3xl border border-line bg-white p-6 shadow-sm">
+      <section className={`${compact ? "" : "mt-8"} rounded-3xl border border-line bg-white p-6 shadow-sm`}>
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Account</p>
@@ -90,7 +90,7 @@ export function DashboardAccountPanel() {
   }
 
   return (
-    <section className="mt-8 rounded-3xl border border-brand-100 bg-white p-6 shadow-sm">
+    <section className={`${compact ? "" : "mt-8"} rounded-3xl border border-brand-100 bg-white p-6 shadow-sm`}>
       <div className="grid gap-6 lg:grid-cols-[.9fr_1.1fr] lg:items-end">
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Account</p>
