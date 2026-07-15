@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import math
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -119,6 +120,24 @@ def _split_json_or_csv(value: Any) -> list[str]:
     if isinstance(parsed, list):
         return [str(item).strip() for item in parsed if str(item).strip()]
     return _split_skills(text)
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if math.isfinite(number) else default
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    return value
 
 
 def _job_type(source: str, role: str = "") -> str:
@@ -332,15 +351,15 @@ def _records_from_ranked(ranked: pd.DataFrame, resume_text: str = "") -> list[di
                 "role": str(row.get("role", "")),
                 "location": str(row.get("location", "")),
                 "type": _job_type(str(row.get("source", "")), str(row.get("role", ""))),
-                "score": float(row.get("match_score", 0) or 0),
-                "deterministicScore": float(row.get("deterministic_match_score", row.get("match_score", 0)) or 0),
+                "score": _safe_float(row.get("match_score", 0)),
+                "deterministicScore": _safe_float(row.get("deterministic_match_score", row.get("match_score", 0))),
                 "recommendation": str(row.get("recommendation", "")),
                 "source": str(row.get("source", "")),
                 "posted": str(row.get("age", "")) or "Unknown",
                 "applicationLink": str(row.get("application_link", "")),
                 "applyUrl": str(row.get("application_link", "")),
-                "matchScore": float(row.get("match_score", 0) or 0),
-                "aiRecruiterRelatednessScore": float(row.get("ai_recruiter_relatedness_score", 0) or 0),
+                "matchScore": _safe_float(row.get("match_score", 0)),
+                "aiRecruiterRelatednessScore": _safe_float(row.get("ai_recruiter_relatedness_score", 0)),
                 "aiRecruiterReasoning": str(row.get("ai_recruiter_reasoning", "")),
                 "aiRecruiterEvidence": _split_json_or_csv(row.get("ai_recruiter_evidence", "")),
                 "aiRecruiterConcerns": _split_json_or_csv(row.get("ai_recruiter_concerns", "")),
@@ -713,6 +732,7 @@ def _rank_resume_text(
         "resumeEncryptionEnabled": bool(stored_resume and stored_resume.get("encrypted")),
         "matchRunId": None,
     }
+    response_payload = _json_safe(response_payload)
     if user:
         match_run_id = save_match_run(int(user["id"]), response_payload)
         response_payload["matchRunId"] = match_run_id
