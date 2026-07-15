@@ -237,7 +237,7 @@ export function ResumeRankForm() {
             {isLoading ? (useAiRecommendations ? "Running Gemini review..." : "Ranking matches...") : selectedResumeId === "new" ? "Generate matches" : "Generate matches from saved resume"}
           </button>
           {isLoading && useAiRecommendations ? (
-            <p className="mt-3 text-center text-sm font-medium text-slateSoft">Gemini is reviewing the strongest matches. This usually takes under 30 seconds.</p>
+            <p className="mt-3 text-center text-sm font-medium text-slateSoft">Gemini is reviewing the strongest matches. This should return a compact recruiter pass instead of blocking the scan.</p>
           ) : null}
         </div>
       </div>

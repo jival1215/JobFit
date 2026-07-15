@@ -201,21 +201,21 @@ def _recommendation_schema() -> dict[str, Any]:
 
 def _gemini_timeout(default: int = 8) -> int:
     try:
-        return max(3, int(os.getenv("GEMINI_TIMEOUT_SECONDS", str(default)) or default))
+        return max(3, min(8, int(os.getenv("GEMINI_TIMEOUT_SECONDS", str(default)) or default)))
     except ValueError:
         return default
 
 
 def _gemini_max_tokens(default: int = 4096) -> int:
     try:
-        return max(256, int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", str(default)) or default))
+        return max(256, min(2048, int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", str(default)) or default)))
     except ValueError:
         return default
 
 
 def _gemini_workers(default: int = 5) -> int:
     try:
-        return max(1, min(8, int(os.getenv("GEMINI_MAX_WORKERS", str(default)) or default)))
+        return max(1, min(3, int(os.getenv("GEMINI_MAX_WORKERS", str(default)) or default)))
     except ValueError:
         return default
 

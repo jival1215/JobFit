@@ -152,6 +152,22 @@ def _parse_job_type_values(value: Any) -> list[str]:
     return normalized
 
 
+def _bounded_int_env(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)) or default)
+    except ValueError:
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def _bounded_float_env(name: str, default: float, minimum: float, maximum: float) -> float:
+    try:
+        value = float(os.getenv(name, str(default)) or default)
+    except ValueError:
+        value = default
+    return max(minimum, min(maximum, value))
+
+
 def _filter_jobs_by_type(jobs: pd.DataFrame, job_types: list[str] | None) -> pd.DataFrame:
     if jobs.empty or not job_types:
         return jobs
@@ -646,15 +662,15 @@ def _rank_resume_text(
             ranked = rerank_top_matches_with_recruiter_agent(
                 ranked,
                 resume_text,
-                target_size=int(os.getenv("GEMINI_RECRUITER_TARGET_SIZE", "3") or 3),
-                batch_size=int(os.getenv("GEMINI_RECRUITER_BATCH_SIZE", "3") or 3),
-                max_candidates=int(os.getenv("GEMINI_RECRUITER_MAX_CANDIDATES", "3") or 3),
-                ai_weight=float(os.getenv("GEMINI_RECRUITER_SCORE_WEIGHT", "0.20") or 0.20),
+                target_size=_bounded_int_env("GEMINI_RECRUITER_TARGET_SIZE", 3, 1, 3),
+                batch_size=_bounded_int_env("GEMINI_RECRUITER_BATCH_SIZE", 3, 1, 3),
+                max_candidates=_bounded_int_env("GEMINI_RECRUITER_MAX_CANDIDATES", 5, 1, 5),
+                ai_weight=_bounded_float_env("GEMINI_RECRUITER_SCORE_WEIGHT", 0.20, 0.0, 0.30),
             )
             ranked = enrich_ranked_with_gemini(
                 ranked,
                 resume_text,
-                int(os.getenv("GEMINI_RECOMMENDATION_LIMIT", "1") or 1),
+                _bounded_int_env("GEMINI_RECOMMENDATION_LIMIT", 1, 0, 2),
             )
         except Exception as exc:
             ai_error = str(exc)
@@ -662,7 +678,7 @@ def _rank_resume_text(
     if not user:
         ranked = merge_statuses(ranked, load_statuses())
 
-    max_returned_jobs = max(25, int(os.getenv("JOBFIT_MAX_RETURNED_JOBS", "150") or 150))
+    max_returned_jobs = _bounded_int_env("JOBFIT_MAX_RETURNED_JOBS", 75, 25, 75)
     returned_ranked = ranked.head(max_returned_jobs)
     records = _records_from_ranked(returned_ranked, resume_text)
     if user:
