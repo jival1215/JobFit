@@ -4,6 +4,7 @@ import json
 import hashlib
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
@@ -555,23 +556,31 @@ def _load_single_source_jobs(source_name: str, force_refresh: bool = False) -> t
 
 def _load_jobs_for_source(source: str, force_refresh: bool = False) -> tuple[pd.DataFrame, str, str, bool]:
     if source == ALL_JOB_REPOS_SOURCE:
-        frames: list[pd.DataFrame] = []
-        urls: list[str] = []
-        fetched_values: list[str] = []
-        used_cache = False
         errors: list[str] = []
-        for source_name in JOB_SOURCES:
+        results: list[tuple[str, pd.DataFrame, str, str, bool]] = []
+
+        def load_source(source_name: str) -> tuple[str, pd.DataFrame, str, str, bool]:
             try:
                 frame, url, fetched_at, source_used_cache = _load_single_source_jobs(source_name, force_refresh)
             except HTTPException as exc:
-                errors.append(f"{source_name}: {exc.detail}")
-                continue
-            if not frame.empty:
-                frames.append(frame)
-            urls.append(url)
-            if fetched_at:
-                fetched_values.append(fetched_at)
-            used_cache = used_cache or source_used_cache
+                raise RuntimeError(f"{source_name}: {exc.detail}") from exc
+            return source_name, frame, url, fetched_at, source_used_cache
+
+        with ThreadPoolExecutor(max_workers=min(6, len(JOB_SOURCES))) as executor:
+            futures = {executor.submit(load_source, source_name): source_name for source_name in JOB_SOURCES}
+            for future in as_completed(futures):
+                try:
+                    results.append(future.result())
+                except RuntimeError as exc:
+                    errors.append(str(exc))
+
+        source_order = list(JOB_SOURCES)
+        results.sort(key=lambda item: source_order.index(item[0]))
+        frames = [frame for _, frame, _, _, _ in results if not frame.empty]
+        urls = [url for _, _, url, _, _ in results]
+        fetched_values = [fetched_at for _, _, _, fetched_at, _ in results if fetched_at]
+        used_cache = any(source_used_cache for _, _, _, _, source_used_cache in results)
+
         if not frames and errors:
             raise HTTPException(status_code=502, detail="Could not load any job source: " + "; ".join(errors))
         combined = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["company", "role", "location", "application_link", "age", "category", "source"])
