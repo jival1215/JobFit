@@ -25,6 +25,9 @@ export default function DashboardPage() {
               <Link href="/upload" className="inline-flex w-fit rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white hover:bg-brand-700">
                 Run scan
               </Link>
+              <Link href="/saved" className="inline-flex w-fit rounded-full border border-line bg-white px-5 py-3 text-sm font-bold text-ink hover:bg-slate-50">
+                Saved jobs
+              </Link>
             </div>
           </div>
         </div>

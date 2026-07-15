@@ -41,6 +41,7 @@ export type JobMatch = {
   scoreBreakdown?: string;
   isNew?: boolean;
   status?: string;
+  savedStatus?: string;
   notes?: string;
   appliedDate?: string;
   followUpDate?: string;

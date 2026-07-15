@@ -83,9 +83,14 @@ export function AccountClient() {
               <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Saved workflow</p>
               <h2 className="mt-2 text-2xl font-black text-ink">Your JobFIT workspace</h2>
             </div>
-            <Link href="/dashboard" className="rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white hover:bg-brand-700">
-              View dashboard
-            </Link>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/saved" className="rounded-full border border-line bg-white px-5 py-3 text-sm font-bold text-ink hover:bg-slate-50">
+                Saved jobs
+              </Link>
+              <Link href="/dashboard" className="rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white hover:bg-brand-700">
+                View dashboard
+              </Link>
+            </div>
           </div>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-5">
