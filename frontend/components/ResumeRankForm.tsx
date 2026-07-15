@@ -7,24 +7,15 @@ import { fetchAccount, getAuthToken, rankResume, rankSavedResume, type AccountRe
 import { UploadBox } from "./UploadBox";
 
 const roleOptions = ["data", "data science", "data engineering", "ai/ml", "software"];
-const sourceOptions = [
-  "All job repos",
-  "Summer internships",
-  "Fall internships",
-  "Full time",
-  "Jobright data new grad",
-  "Jobright software new grad",
-  "Jobright product internships",
-  "Jobright software internships",
-  "Jobright public sector internships"
-];
+const jobTypeOptions = ["Internship", "Co-op", "Full-Time"];
+const ALL_REPOS_SOURCE = "All job repos";
 
 export function ResumeRankForm() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
-  const [source, setSource] = useState("All job repos");
   const [locations, setLocations] = useState("Remote, NYC, New Jersey");
   const [roles, setRoles] = useState(["data", "data science", "data engineering", "ai/ml"]);
+  const [jobTypes, setJobTypes] = useState(jobTypeOptions);
   const [useAiRecommendations, setUseAiRecommendations] = useState(false);
   const [selectedResumeId, setSelectedResumeId] = useState("new");
   const [account, setAccount] = useState<AccountResponse | null>(null);
@@ -49,6 +40,10 @@ export function ResumeRankForm() {
     setRoles((current) => (current.includes(role) ? current.filter((item) => item !== role) : [...current, role]));
   }
 
+  function toggleJobType(jobType: string) {
+    setJobTypes((current) => (current.includes(jobType) ? current.filter((item) => item !== jobType) : [...current, jobType]));
+  }
+
   async function handleSubmit() {
     if (selectedResumeId === "new" && !file) {
       setError(account?.resumes?.length ? "Choose a saved resume or upload a new file." : "Choose a resume file first.");
@@ -60,9 +55,10 @@ export function ResumeRankForm() {
 
     try {
       const payload = {
-        source,
+        source: ALL_REPOS_SOURCE,
         preferred_roles: roles,
         preferred_locations: locations,
+        preferred_job_types: jobTypes.length ? jobTypes : jobTypeOptions,
         use_ai_recommendations: useAiRecommendations
       };
       const result = selectedResumeId !== "new" && selectedResume
@@ -77,12 +73,13 @@ export function ResumeRankForm() {
     }
   }
 
-  async function rankUploadedResume(payload: { source: string; preferred_roles: string[]; preferred_locations: string; use_ai_recommendations: boolean }) {
+  async function rankUploadedResume(payload: { source: string; preferred_roles: string[]; preferred_locations: string; preferred_job_types: string[]; use_ai_recommendations: boolean }) {
     const formData = new FormData();
     formData.append("resume", file as File);
     formData.append("source", payload.source);
     formData.append("preferred_roles", JSON.stringify(payload.preferred_roles));
     formData.append("preferred_locations", payload.preferred_locations);
+    formData.append("preferred_job_types", JSON.stringify(payload.preferred_job_types));
     formData.append("use_ai_recommendations", String(payload.use_ai_recommendations));
     return rankResume(formData);
   }
@@ -159,27 +156,22 @@ export function ResumeRankForm() {
         </div>
 
         <div className="p-5 sm:p-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-sm font-semibold text-ink">Job source</span>
-              <select
-                value={source}
-                onChange={(event) => setSource(event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink outline-none transition focus:border-brand-500"
-              >
-                {sourceOptions.map((item) => <option key={item}>{item}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-ink">Location preference</span>
-              <input
-                value={locations}
-                onChange={(event) => setLocations(event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink outline-none transition focus:border-brand-500"
-                placeholder="Remote, NYC, New Jersey"
-              />
-            </label>
+          <div className="rounded-2xl border border-line bg-slate-50 p-4">
+            <p className="text-sm font-bold text-ink">Job database</p>
+            <p className="mt-1 text-sm leading-6 text-slateSoft">
+              Every scan searches all connected SimplifyJobs and Jobright repos. Use the filters below to narrow by role and job type.
+            </p>
           </div>
+
+          <label className="mt-4 block">
+            <span className="text-sm font-semibold text-ink">Location preference</span>
+            <input
+              value={locations}
+              onChange={(event) => setLocations(event.target.value)}
+              className="mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink outline-none transition focus:border-brand-500"
+              placeholder="Remote, NYC, New Jersey"
+            />
+          </label>
 
           <div className="mt-5">
             <span className="text-sm font-semibold text-ink">Role focus</span>
@@ -196,6 +188,26 @@ export function ResumeRankForm() {
                   }`}
                 >
                   {role}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <span className="text-sm font-semibold text-ink">Job type</span>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {jobTypeOptions.map((jobType) => (
+                <button
+                  key={jobType}
+                  type="button"
+                  onClick={() => toggleJobType(jobType)}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold ring-1 transition ${
+                    jobTypes.includes(jobType)
+                      ? "bg-brand-600 text-white ring-brand-600"
+                      : "bg-white text-slate-700 ring-line hover:bg-slate-50"
+                  }`}
+                >
+                  {jobType}
                 </button>
               ))}
             </div>

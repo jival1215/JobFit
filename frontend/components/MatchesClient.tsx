@@ -15,6 +15,7 @@ export function MatchesClient({ fallbackJobs }: MatchesClientProps) {
   const [role, setRole] = useState("");
   const [location, setLocation] = useState("");
   const [company, setCompany] = useState("");
+  const [jobType, setJobType] = useState("");
   const [minimum, setMinimum] = useState("70");
 
   useEffect(() => {
@@ -36,10 +37,11 @@ export function MatchesClient({ fallbackJobs }: MatchesClientProps) {
       const matchesRole = role ? job.title.toLowerCase().includes(role.toLowerCase()) : true;
       const matchesLocation = location ? job.location.toLowerCase().includes(location.toLowerCase()) : true;
       const matchesCompany = company ? job.company.toLowerCase().includes(company.toLowerCase()) : true;
+      const matchesType = jobType ? job.type === jobType : true;
       const matchesScore = job.score >= Number(minimum);
-      return matchesRole && matchesLocation && matchesCompany && matchesScore;
+      return matchesRole && matchesLocation && matchesCompany && matchesType && matchesScore;
     });
-  }, [jobs, role, location, company, minimum]);
+  }, [jobs, role, location, company, jobType, minimum]);
 
   return (
     <>
@@ -49,7 +51,7 @@ export function MatchesClient({ fallbackJobs }: MatchesClientProps) {
           <h1 className="mt-4 text-4xl font-black tracking-tight text-ink sm:text-6xl">Apply-first job list.</h1>
           <p className="mt-4 max-w-2xl text-lg leading-8 text-slateSoft">
             {ranked
-              ? `Showing live SimplifyJobs results from ${ranked.source}${fetchedLabel ? `, refreshed ${fetchedLabel}` : ""}. ${ranked.newCount} jobs were new in this scan.`
+              ? `Showing ranked results from all connected repos${fetchedLabel ? `, refreshed ${fetchedLabel}` : ""}. Scanned ${ranked.count} jobs and returned the top ${ranked.returnedCount ?? ranked.jobs.length}.`
               : "No backend scan is loaded yet, so this page is showing realistic mock matches."}
           </p>
           {ranked?.aiRecommendationsRequested ? (
@@ -60,26 +62,19 @@ export function MatchesClient({ fallbackJobs }: MatchesClientProps) {
             }`}>
               {ranked.aiRecommendationsEnabled
                 ? `Gemini reviewed ${ranked.aiRecruiterReviewedCount ?? 0} candidates and enhanced recommendation text for ${ranked.aiEnhancedCount ?? 0} top matches`
-                : "Gemini was requested, but the backend API key is not enabled"}
+                : ranked.aiError
+                  ? `Gemini was requested but skipped: ${ranked.aiError}`
+                  : "Gemini was requested, but the backend API key is not enabled"}
             </p>
           ) : null}
         </div>
         <div className="rounded-2xl border border-line bg-white p-4 text-sm text-slate-600 shadow-sm">
-          <p className="font-semibold text-ink">Showing {filtered.length} of {jobs.length} matches</p>
-          {ranked?.sourceUrl ? (
-            <a
-              href={ranked.sourceUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1 block truncate text-brand-600 hover:text-brand-700"
-            >
-              Live source repo
-            </a>
-          ) : null}
+          <p className="font-semibold text-ink">Showing {filtered.length} of {jobs.length} returned matches</p>
+          <p className="mt-1 text-slateSoft">{ranked ? `${ranked.count} total jobs scanned` : "Demo result set"}</p>
         </div>
       </div>
       <div className="mt-8 rounded-3xl border border-line bg-white p-4 shadow-sm">
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-5">
           <input
             value={role}
             onChange={(event) => setRole(event.target.value)}
@@ -98,6 +93,16 @@ export function MatchesClient({ fallbackJobs }: MatchesClientProps) {
             className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
             placeholder="Company"
           />
+          <select
+            value={jobType}
+            onChange={(event) => setJobType(event.target.value)}
+            className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
+          >
+            <option value="">All job types</option>
+            <option value="Internship">Internship</option>
+            <option value="Co-op">Co-op</option>
+            <option value="Full-Time">Full-Time</option>
+          </select>
           <select
             value={minimum}
             onChange={(event) => setMinimum(event.target.value)}

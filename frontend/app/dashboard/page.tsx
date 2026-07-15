@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { DashboardAccountPanel } from "@/components/DashboardAccountPanel";
 import { MatchesClient } from "@/components/MatchesClient";
-import { StatsCard } from "@/components/StatsCard";
-import { jobMatches, stats } from "@/lib/mock-data";
+import { DashboardStatsClient } from "@/components/DashboardStatsClient";
+import { jobMatches } from "@/lib/mock-data";
 
 export default function DashboardPage() {
   return (
@@ -35,11 +35,7 @@ export default function DashboardPage() {
 
       <DashboardAccountPanel />
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <StatsCard key={stat.label} {...stat} />
-        ))}
-      </div>
+      <DashboardStatsClient fallbackJobs={jobMatches} />
 
       <div className="mt-12">
         <MatchesClient fallbackJobs={jobMatches} />

@@ -10,7 +10,7 @@ export type JobMatch = {
   company: string;
   title: string;
   location: string;
-  type: "Internship" | "Co-op" | "New Grad";
+  type: "Internship" | "Co-op" | "Full-Time";
   score: number;
   matchScore?: number;
   deterministicScore?: number;
@@ -48,10 +48,10 @@ export type JobMatch = {
 };
 
 export const stats = [
-  { label: "Jobs scanned", value: "428", detail: "Across SimplifyJobs sources" },
-  { label: "Apply-first matches", value: "37", detail: "Strong fit for your resume" },
-  { label: "Avg top score", value: "84", detail: "Top 10 recruiter-fit score" },
-  { label: "Saved jobs", value: "12", detail: "Tracked locally" }
+  { label: "Jobs scanned", value: "Live", detail: "All repos after resume upload" },
+  { label: "Apply-first matches", value: "Ranked", detail: "Based on your resume" },
+  { label: "Avg top score", value: "Dynamic", detail: "Top shown matches" },
+  { label: "Saved jobs", value: "Synced", detail: "Stored in your account" }
 ];
 
 export const jobMatches: JobMatch[] = [

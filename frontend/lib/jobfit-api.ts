@@ -38,12 +38,14 @@ export type RankResponse = {
   resumeEncryptionEnabled?: boolean;
   usedJobCache?: boolean;
   jobCacheTtlMinutes?: number;
+  returnedCount?: number;
+  maxReturnedJobs?: number;
+  aiError?: string;
 };
 
-const CONFIGURED_API_BASE_URL = process.env.NEXT_PUBLIC_JOBFIT_API_URL?.replace(/\/$/, "") || "";
 const PROXY_API_BASE_URL = "/api/jobfit";
 
-export const API_BASE_URL = CONFIGURED_API_BASE_URL || PROXY_API_BASE_URL;
+export const API_BASE_URL = PROXY_API_BASE_URL;
 export const AUTH_TOKEN_KEY = "jobfit:auth-token";
 
 export function getAuthToken() {
@@ -71,9 +73,6 @@ async function apiFetch(path: string, init?: RequestInit) {
   try {
     return await fetch(`${API_BASE_URL}${path}`, init);
   } catch (error) {
-    if (CONFIGURED_API_BASE_URL && typeof window !== "undefined") {
-      return fetch(`${PROXY_API_BASE_URL}${path}`, init);
-    }
     const detail = error instanceof Error ? error.message : "Network request failed";
     throw new Error(`Unable to reach JobFIT backend: ${detail}`);
   }
@@ -100,7 +99,7 @@ export async function rankResume(formData: FormData): Promise<RankResponse> {
 
 export async function rankSavedResume(
   resumeId: number,
-  payload: { source: string; preferred_roles: string[]; preferred_locations: string; use_ai_recommendations: boolean }
+  payload: { source: string; preferred_roles: string[]; preferred_locations: string; preferred_job_types?: string[]; use_ai_recommendations: boolean }
 ): Promise<RankResponse> {
   const response = await apiFetch(`/api/rank/resume/${resumeId}`, {
     method: "POST",

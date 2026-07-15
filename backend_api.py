@@ -121,12 +121,43 @@ def _split_json_or_csv(value: Any) -> list[str]:
     return _split_skills(text)
 
 
-def _job_type(source: str) -> str:
-    if "full" in source.lower():
-        return "New Grad"
-    if "fall" in source.lower() or "off" in source.lower():
+def _job_type(source: str, role: str = "") -> str:
+    source_text = source.lower()
+    role_text = role.lower()
+    if "co-op" in role_text or "coop" in role_text or "fall" in source_text or "off" in source_text:
         return "Co-op"
+    if "new grad" in source_text or "full" in source_text or "new grad" in role_text or "early career" in role_text:
+        return "Full-Time"
     return "Internship"
+
+
+def _normalize_job_type(value: Any) -> str:
+    text = str(value or "").strip().lower().replace("_", "-")
+    if text in {"co-op", "coop", "co op"}:
+        return "Co-op"
+    if text in {"full-time", "full time", "fulltime", "new grad", "new-grad"}:
+        return "Full-Time"
+    if text in {"internship", "intern", "summer", "product internship", "software internship"}:
+        return "Internship"
+    return ""
+
+
+def _parse_job_type_values(value: Any) -> list[str]:
+    raw_values = _split_json_or_csv(value)
+    normalized = []
+    for item in raw_values:
+        job_type = _normalize_job_type(item)
+        if job_type and job_type not in normalized:
+            normalized.append(job_type)
+    return normalized
+
+
+def _filter_jobs_by_type(jobs: pd.DataFrame, job_types: list[str] | None) -> pd.DataFrame:
+    if jobs.empty or not job_types:
+        return jobs
+    allowed = set(job_types)
+    mask = jobs.apply(lambda row: _job_type(str(row.get("source", "")), str(row.get("role", ""))) in allowed, axis=1)
+    return jobs.loc[mask].reset_index(drop=True)
 
 
 def _safe_job_id(row: pd.Series, index: int) -> str:
@@ -284,7 +315,7 @@ def _records_from_ranked(ranked: pd.DataFrame, resume_text: str = "") -> list[di
                 "title": str(row.get("role", "")),
                 "role": str(row.get("role", "")),
                 "location": str(row.get("location", "")),
-                "type": _job_type(str(row.get("source", ""))),
+                "type": _job_type(str(row.get("source", "")), str(row.get("role", ""))),
                 "score": float(row.get("match_score", 0) or 0),
                 "deterministicScore": float(row.get("deterministic_match_score", row.get("match_score", 0)) or 0),
                 "recommendation": str(row.get("recommendation", "")),
@@ -598,28 +629,36 @@ def _rank_resume_text(
     source: str,
     role_values: list[str],
     location_values: list[str],
+    job_type_values: list[str] | None,
     use_ai_recommendations: bool,
     user: dict[str, Any] | None,
     stored_resume: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    source = ALL_JOB_REPOS_SOURCE
     jobs, source_url, fetched_at, used_job_cache = _load_jobs_for_source(source)
+    jobs = _filter_jobs_by_type(jobs, job_type_values)
     jobs = mark_new_jobs(jobs, source)
     ranked = rank_jobs(resume_text, jobs, role_values, location_values)
     ai_recruiter_rerank_enabled = bool(use_ai_recommendations and gemini_enabled())
+    ai_error = ""
     if ai_recruiter_rerank_enabled:
-        ranked = rerank_top_matches_with_recruiter_agent(
-            ranked,
-            resume_text,
-            target_size=int(os.getenv("GEMINI_RECRUITER_TARGET_SIZE", "5") or 5),
-            batch_size=int(os.getenv("GEMINI_RECRUITER_BATCH_SIZE", "5") or 5),
-            max_candidates=int(os.getenv("GEMINI_RECRUITER_MAX_CANDIDATES", "5") or 5),
-            ai_weight=float(os.getenv("GEMINI_RECRUITER_SCORE_WEIGHT", "0.20") or 0.20),
-        )
-        ranked = enrich_ranked_with_gemini(
-            ranked,
-            resume_text,
-            int(os.getenv("GEMINI_RECOMMENDATION_LIMIT", "2") or 2),
-        )
+        try:
+            ranked = rerank_top_matches_with_recruiter_agent(
+                ranked,
+                resume_text,
+                target_size=int(os.getenv("GEMINI_RECRUITER_TARGET_SIZE", "3") or 3),
+                batch_size=int(os.getenv("GEMINI_RECRUITER_BATCH_SIZE", "3") or 3),
+                max_candidates=int(os.getenv("GEMINI_RECRUITER_MAX_CANDIDATES", "3") or 3),
+                ai_weight=float(os.getenv("GEMINI_RECRUITER_SCORE_WEIGHT", "0.20") or 0.20),
+            )
+            ranked = enrich_ranked_with_gemini(
+                ranked,
+                resume_text,
+                int(os.getenv("GEMINI_RECOMMENDATION_LIMIT", "1") or 1),
+            )
+        except Exception as exc:
+            ai_error = str(exc)
+            ai_recruiter_rerank_enabled = False
     if not user:
         ranked = merge_statuses(ranked, load_statuses())
 
@@ -647,6 +686,7 @@ def _rank_resume_text(
         "aiRecommendationsRequested": bool(use_ai_recommendations),
         "aiRecommendationsEnabled": bool(use_ai_recommendations and gemini_enabled()),
         "aiRecruiterRerankEnabled": ai_recruiter_rerank_enabled,
+        "aiError": ai_error,
         "aiRecruiterReviewedCount": int(ranked.get("ai_recruiter_relatedness_score", pd.Series(dtype=float)).notna().sum()) if "ai_recruiter_relatedness_score" in ranked else 0,
         "aiEnhancedCount": sum(1 for job in records if job.get("aiEnhanced")),
         "jobs": records,
@@ -667,14 +707,16 @@ def _rank_resume_text(
 @app.post("/api/rank")
 async def rank_resume(
     resume: UploadFile = File(...),
-    source: str = Form("Summer internships"),
+    source: str = Form(ALL_JOB_REPOS_SOURCE),
     preferred_roles: str = Form('["data","data science","data engineering","ai/ml"]'),
     preferred_locations: str = Form("remote, nyc, new york, new jersey, nj, philadelphia, pa, united states, usa"),
+    preferred_job_types: str = Form('["Internship","Co-op","Full-Time"]'),
     use_ai_recommendations: bool = Form(False),
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
     role_values = _parse_role_values(preferred_roles)
     location_values = [item.strip() for item in preferred_locations.split(",") if item.strip()]
+    job_type_values = _parse_job_type_values(preferred_job_types)
     data = await resume.read()
     resume_text = extract_resume_text(UploadedResume(resume.filename or "resume", data))
     if not resume_text:
@@ -691,7 +733,7 @@ async def rank_resume(
             resume_text,
         )
 
-    return _rank_resume_text(resume_text, source, role_values, location_values, use_ai_recommendations, user, stored_resume)
+    return _rank_resume_text(resume_text, source, role_values, location_values, job_type_values, use_ai_recommendations, user, stored_resume)
 
 
 @app.post("/api/rank/resume/{resume_id}")
@@ -708,14 +750,15 @@ def rank_saved_resume(
     if not stored_resume or not str(stored_resume.get("extractedText", "")).strip():
         raise HTTPException(status_code=404, detail="Saved resume not found")
 
-    source = str(payload.get("source") or "Summer internships")
+    source = ALL_JOB_REPOS_SOURCE
     role_values = _parse_role_values(payload.get("preferred_roles") or payload.get("preferredRoles") or [])
     preferred_locations = str(payload.get("preferred_locations") or payload.get("preferredLocations") or "")
     location_values = [item.strip() for item in preferred_locations.split(",") if item.strip()]
+    job_type_values = _parse_job_type_values(payload.get("preferred_job_types") or payload.get("preferredJobTypes") or ["Internship", "Co-op", "Full-Time"])
     use_ai_recommendations = bool(payload.get("use_ai_recommendations") or payload.get("useAiRecommendations"))
     resume_text = str(stored_resume.pop("extractedText"))
 
-    return _rank_resume_text(resume_text, source, role_values, location_values, use_ai_recommendations, user, stored_resume)
+    return _rank_resume_text(resume_text, source, role_values, location_values, job_type_values, use_ai_recommendations, user, stored_resume)
 
 
 @app.get("/api/tracker")
