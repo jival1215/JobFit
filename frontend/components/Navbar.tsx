@@ -3,6 +3,7 @@ import Link from "next/link";
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/upload", label: "Upload" },
+  { href: "/account", label: "Account" },
   { href: "/about", label: "About" }
 ];
 
@@ -27,12 +28,20 @@ export function Navbar() {
             </Link>
           ))}
         </div>
-        <Link
-          href="/upload"
-          className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
-        >
-          Start matching
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/account"
+            className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-ink shadow-sm transition hover:bg-slate-50"
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/upload"
+            className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+          >
+            Start matching
+          </Link>
+        </div>
       </nav>
     </header>
   );
