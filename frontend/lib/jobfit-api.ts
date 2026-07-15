@@ -40,10 +40,8 @@ export type RankResponse = {
   jobCacheTtlMinutes?: number;
 };
 
-const CONFIGURED_API_BASE_URL = process.env.NEXT_PUBLIC_JOBFIT_API_URL?.replace(/\/$/, "") || "";
-const PROXY_API_BASE_URL = "/api/jobfit";
-
-export const API_BASE_URL = CONFIGURED_API_BASE_URL || PROXY_API_BASE_URL;
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_JOBFIT_API_URL?.replace(/\/$/, "") || "https://jobfit-api-production.up.railway.app";
 export const AUTH_TOKEN_KEY = "jobfit:auth-token";
 
 export function getAuthToken() {
@@ -68,22 +66,19 @@ function authHeaders(token = getAuthToken()): HeadersInit {
 }
 
 async function apiFetch(path: string, init?: RequestInit) {
-  const primaryUrl = `${API_BASE_URL}${path}`;
-
   try {
-    return await fetch(primaryUrl, init);
+    return await fetch(`${API_BASE_URL}${path}`, init);
   } catch (error) {
-    if (CONFIGURED_API_BASE_URL && typeof window !== "undefined") {
-      return fetch(`${PROXY_API_BASE_URL}${path}`, init);
-    }
-    throw error;
+    const detail = error instanceof Error ? error.message : "Network request failed";
+    throw new Error(`Unable to reach JobFIT backend: ${detail}`);
   }
 }
 
 async function parseOrThrow(response: Response, fallback: string) {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || fallback);
+    const detail = error.detail || `${fallback} (${response.status} ${response.statusText || "error"})`;
+    throw new Error(detail);
   }
   return response.json();
 }
