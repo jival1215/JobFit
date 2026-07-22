@@ -141,49 +141,59 @@ export function DashboardAccountPanel({ compact = false }: { compact?: boolean }
               </button>
             ))}
           </div>
-          {mode === "register" ? (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              submit();
+            }}
+          >
+            {mode === "register" ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <input
+                  value={firstName}
+                  onChange={(event) => setFirstName(event.target.value)}
+                  className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
+                  placeholder="First name"
+                  type="text"
+                  autoComplete="given-name"
+                />
+                <input
+                  value={lastName}
+                  onChange={(event) => setLastName(event.target.value)}
+                  className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
+                  placeholder="Last name"
+                  type="text"
+                  autoComplete="family-name"
+                />
+              </div>
+            ) : null}
+            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
               <input
-                value={firstName}
-                onChange={(event) => setFirstName(event.target.value)}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
                 className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
-                placeholder="First name"
-                type="text"
+                placeholder="Email"
+                type="email"
+                autoComplete="email"
               />
               <input
-                value={lastName}
-                onChange={(event) => setLastName(event.target.value)}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
                 className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
-                placeholder="Last name"
-                type="text"
+                placeholder="Password"
+                type="password"
+                autoComplete={mode === "register" ? "new-password" : "current-password"}
               />
+              <button
+                type="submit"
+                disabled={loading}
+                className="rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 disabled:opacity-60"
+              >
+                {loading ? "..." : mode === "login" ? "Sign in" : "Create"}
+              </button>
             </div>
-          ) : null}
-          <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-            <input
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
-              placeholder="Email"
-              type="email"
-            />
-            <input
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
-              placeholder="Password"
-              type="password"
-            />
-            <button
-              type="button"
-              onClick={submit}
-              disabled={loading}
-              className="rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 disabled:opacity-60"
-            >
-              {loading ? "..." : mode === "login" ? "Sign in" : "Create"}
-            </button>
-          </div>
-          {error ? <p className="mt-3 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p> : null}
+            {error ? <p className="mt-3 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p> : null}
+          </form>
         </div>
       </div>
     </section>

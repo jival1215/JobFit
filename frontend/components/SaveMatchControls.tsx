@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getAuthToken, saveMatch } from "@/lib/jobfit-api";
+import { AUTH_CHANGED_EVENT, getAuthToken, saveMatch } from "@/lib/jobfit-api";
 import type { JobMatch } from "@/lib/mock-data";
 
 export function SaveMatchControls({ job }: { job: JobMatch }) {
@@ -13,8 +13,22 @@ export function SaveMatchControls({ job }: { job: JobMatch }) {
   const [hasToken, setHasToken] = useState(false);
 
   useEffect(() => {
-    setHasToken(Boolean(getAuthToken()));
+    function syncAuthState() {
+      setHasToken(Boolean(getAuthToken()));
+    }
+
+    syncAuthState();
+    window.addEventListener(AUTH_CHANGED_EVENT, syncAuthState);
+    window.addEventListener("storage", syncAuthState);
+    return () => {
+      window.removeEventListener(AUTH_CHANGED_EVENT, syncAuthState);
+      window.removeEventListener("storage", syncAuthState);
+    };
   }, []);
+
+  useEffect(() => {
+    setCurrent(job.status || job.savedStatus || "");
+  }, [job.savedStatus, job.status]);
 
   if (!hasToken) {
     return (

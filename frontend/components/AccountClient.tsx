@@ -190,60 +190,70 @@ export function AccountClient() {
         ))}
       </div>
 
-      {mode === "register" ? (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <label className="block">
-            <span className="text-sm font-semibold text-ink">First name</span>
-            <input
-              value={firstName}
-              onChange={(event) => setFirstName(event.target.value)}
-              className="mt-2 w-full rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
-              placeholder="First name"
-              type="text"
-            />
-          </label>
-          <label className="block">
-            <span className="text-sm font-semibold text-ink">Last name</span>
-            <input
-              value={lastName}
-              onChange={(event) => setLastName(event.target.value)}
-              className="mt-2 w-full rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
-              placeholder="Last name"
-              type="text"
-            />
-          </label>
-        </div>
-      ) : null}
-
-      <label className={mode === "register" ? "mt-4 block" : "mt-6 block"}>
-        <span className="text-sm font-semibold text-ink">Email</span>
-        <input
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="mt-2 w-full rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
-          placeholder="you@example.com"
-          type="email"
-        />
-      </label>
-      <label className="mt-4 block">
-        <span className="text-sm font-semibold text-ink">Password</span>
-        <input
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="mt-2 w-full rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
-          placeholder="At least 8 characters"
-          type="password"
-        />
-      </label>
-      {error ? <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p> : null}
-      <button
-        type="button"
-        onClick={submit}
-        disabled={loading}
-        className="mt-6 w-full rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 disabled:opacity-60"
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          submit();
+        }}
       >
-        {loading ? "Working..." : mode === "login" ? "Sign in" : "Create account"}
-      </button>
+        {mode === "register" ? (
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-sm font-semibold text-ink">First name</span>
+              <input
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+                className="mt-2 w-full rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
+                placeholder="First name"
+                type="text"
+                autoComplete="given-name"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-ink">Last name</span>
+              <input
+                value={lastName}
+                onChange={(event) => setLastName(event.target.value)}
+                className="mt-2 w-full rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
+                placeholder="Last name"
+                type="text"
+                autoComplete="family-name"
+              />
+            </label>
+          </div>
+        ) : null}
+
+        <label className={mode === "register" ? "mt-4 block" : "mt-6 block"}>
+          <span className="text-sm font-semibold text-ink">Email</span>
+          <input
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
+            placeholder="you@example.com"
+            type="email"
+            autoComplete="email"
+          />
+        </label>
+        <label className="mt-4 block">
+          <span className="text-sm font-semibold text-ink">Password</span>
+          <input
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500"
+            placeholder="At least 8 characters"
+            type="password"
+            autoComplete={mode === "register" ? "new-password" : "current-password"}
+          />
+        </label>
+        {error ? <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p> : null}
+        <button
+          type="submit"
+          disabled={loading}
+          className="mt-6 w-full rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 disabled:opacity-60"
+        >
+          {loading ? "Working..." : mode === "login" ? "Sign in" : "Create account"}
+        </button>
+      </form>
     </section>
   );
 }

@@ -146,28 +146,34 @@ export function LandingAccountCard() {
         </p>
       </div>
 
-      {mode === "register" ? (
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <input value={firstName} onChange={(event) => setFirstName(event.target.value)} className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500" placeholder="First name" type="text" />
-          <input value={lastName} onChange={(event) => setLastName(event.target.value)} className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500" placeholder="Last name" type="text" />
-        </div>
-      ) : null}
-
-      <div className="mt-3 grid gap-3">
-        <input value={email} onChange={(event) => setEmail(event.target.value)} className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500" placeholder="Email" type="email" />
-        <input value={password} onChange={(event) => setPassword(event.target.value)} className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500" placeholder="Password" type="password" />
-      </div>
-
-      {error ? <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p> : null}
-
-      <button
-        type="button"
-        onClick={submit}
-        disabled={loading}
-        className="mt-5 w-full rounded-full bg-brand-600 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          submit();
+        }}
       >
-        {loading ? "Working..." : mode === "register" ? "Create account" : "Sign in"}
-      </button>
+        {mode === "register" ? (
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <input value={firstName} onChange={(event) => setFirstName(event.target.value)} className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500" placeholder="First name" type="text" autoComplete="given-name" />
+            <input value={lastName} onChange={(event) => setLastName(event.target.value)} className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500" placeholder="Last name" type="text" autoComplete="family-name" />
+          </div>
+        ) : null}
+
+        <div className="mt-3 grid gap-3">
+          <input value={email} onChange={(event) => setEmail(event.target.value)} className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500" placeholder="Email" type="email" autoComplete="email" />
+          <input value={password} onChange={(event) => setPassword(event.target.value)} className="rounded-2xl border border-line px-4 py-3 text-sm outline-none focus:border-brand-500" placeholder="Password" type="password" autoComplete={mode === "register" ? "new-password" : "current-password"} />
+        </div>
+
+        {error ? <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p> : null}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="mt-5 w-full rounded-full bg-brand-600 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {loading ? "Working..." : mode === "register" ? "Create account" : "Sign in"}
+        </button>
+      </form>
       <p className="mt-4 text-center text-xs font-semibold text-slateSoft">
         Your resume data is stored behind your JobFIT account through the backend, not exposed directly to the browser.
       </p>

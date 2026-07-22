@@ -55,10 +55,14 @@ export function MatchDetailsClient({ id, fallbackJobs }: { id: string; fallbackJ
   useEffect(() => {
     const saved = window.localStorage.getItem("jobfit:ranked-results");
     if (saved) {
-      const parsed = JSON.parse(saved) as RankResponse;
-      setJobs(parsed.jobs);
+      try {
+        const parsed = JSON.parse(saved) as RankResponse;
+        setJobs(parsed.jobs ?? fallbackJobs);
+      } catch {
+        setJobs(fallbackJobs);
+      }
     }
-  }, []);
+  }, [fallbackJobs]);
 
   const decodedId = decodeURIComponent(id);
   const job = jobs.find((item) => item.id === id || item.id === decodedId || item.backendId === decodedId);

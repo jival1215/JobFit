@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchJobSources, type JobSourcesResponse } from "@/lib/jobfit-api";
 
 function relativeTime(value: string) {
-  if (!value) return "Not refreshed yet";
+  if (!value) return "Waiting for first scan";
   const timestamp = new Date(value).getTime();
   if (Number.isNaN(timestamp)) return "Recently checked";
   const diffMinutes = Math.max(0, Math.round((Date.now() - timestamp) / 60000));
@@ -63,7 +63,7 @@ export function JobDatabaseStatus() {
                 <p className="mt-1 text-sm font-semibold text-slateSoft">Repos connected</p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-2xl font-black text-ink">{totals.jobs || "Live"}</p>
+                <p className="text-2xl font-black text-ink">{totals.jobs || "No cache"}</p>
                 <p className="mt-1 text-sm font-semibold text-slateSoft">Cached jobs</p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
