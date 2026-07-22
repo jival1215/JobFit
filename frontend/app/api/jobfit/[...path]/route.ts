@@ -3,10 +3,11 @@ const BACKEND_URL = (process.env.JOBFIT_API_URL || process.env.NEXT_PUBLIC_JOBFI
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type RouteContext = { params: { path?: string[] } };
+type RouteContext = { params: Promise<{ path?: string[] }> };
 
 async function proxyJobFitRequest(request: Request, context: RouteContext) {
-  const path = (context.params.path || []).join("/");
+  const params = await context.params;
+  const path = (params.path || []).join("/");
   const requestUrl = new URL(request.url);
   const targetUrl = `${BACKEND_URL}/${path}${requestUrl.search}`;
   const headers = new Headers(request.headers);
