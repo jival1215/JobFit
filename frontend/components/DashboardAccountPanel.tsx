@@ -87,14 +87,15 @@ export function DashboardAccountPanel({ compact = false }: { compact?: boolean }
 
   if (account) {
     const summary = account.summary ?? {};
+    const displayName = account.user.firstName || account.user.displayName || "Your JobFIT workspace";
     return (
       <section className={`${compact ? "" : "mt-8"} rounded-3xl border border-line bg-white p-6 shadow-sm`}>
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Account</p>
-            <h2 className="mt-2 text-2xl font-black text-ink">Signed in as {account.user.displayName || account.user.email}</h2>
+            <h2 className="mt-2 text-2xl font-black text-ink">{displayName}</h2>
             <p className="mt-2 text-sm leading-6 text-slateSoft">
-              Saved jobs, scan history, and uploaded resume records are stored behind your signed-in JobFIT account.
+              Signed in as {account.user.email}. Saved jobs, scan history, and uploaded resume records are stored behind your JobFIT account.
             </p>
           </div>
           <button

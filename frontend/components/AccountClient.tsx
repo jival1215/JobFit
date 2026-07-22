@@ -87,13 +87,14 @@ export function AccountClient() {
 
   if (account) {
     const summary = account.summary ?? {};
+    const displayName = account.user.firstName || account.user.displayName || "Your JobFIT workspace";
     return (
       <div className="grid gap-8 lg:grid-cols-[.85fr_1.15fr]">
         <section className="rounded-3xl bg-ink p-8 text-white shadow-soft">
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-300">Signed in</p>
-          <h1 className="mt-4 text-4xl font-black tracking-tight">{account.user.displayName || account.user.email}</h1>
+          <h1 className="mt-4 text-4xl font-black tracking-tight">{displayName}</h1>
           <p className="mt-4 text-sm leading-6 text-white/70">
-            Your account stores saved jobs, resume records, and scan history. Your data is stored through the JobFIT backend and Supabase persistence layer.
+            Signed in as {account.user.email}. Your account stores saved jobs, resume records, and scan history through the JobFIT backend and Supabase persistence layer.
           </p>
           <button
             type="button"

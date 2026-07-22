@@ -44,6 +44,13 @@ export function JobMatchCard({ job }: { job: JobMatch }) {
         </div>
       ) : null}
 
+      {job.scoreBreakdown ? (
+        <div className="relative z-10 mt-4 rounded-2xl border border-line bg-slate-50 p-4">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Score breakdown</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{job.scoreBreakdown}</p>
+        </div>
+      ) : null}
+
       <div className="relative z-10 mt-5 grid gap-4 sm:grid-cols-2">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Matched</p>

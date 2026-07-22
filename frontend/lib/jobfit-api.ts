@@ -18,6 +18,21 @@ export type AccountResponse = {
 
 export type SavedMatchesResponse = { jobs: JobMatch[]; summary: Record<string, number> };
 
+export type JobSourceCacheEntry = {
+  sourceName: string;
+  sourceUrl: string;
+  fetchedAt: string;
+  jobCount: number;
+  updatedAt?: string;
+};
+
+export type JobSourcesResponse = {
+  defaultSource: string;
+  sources: string[];
+  cache: JobSourceCacheEntry[];
+  cacheTtlMinutes: number;
+};
+
 export type RankResponse = {
   source: string;
   sourceUrl?: string;
@@ -151,6 +166,11 @@ export async function logoutAccount() {
 export async function fetchSavedMatches(): Promise<SavedMatchesResponse> {
   const response = await apiFetch("/api/saved-matches", { headers: authHeaders() });
   return parseOrThrow(response, "Unable to load saved matches");
+}
+
+export async function fetchJobSources(): Promise<JobSourcesResponse> {
+  const response = await apiFetch("/api/job-sources", { cache: "no-store" });
+  return parseOrThrow(response, "Unable to load job sources");
 }
 
 export async function saveMatch(job: JobMatch, status = "Saved", notes = "") {

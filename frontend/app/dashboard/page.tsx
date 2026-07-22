@@ -2,6 +2,7 @@ import { DashboardAccountPanel } from "@/components/DashboardAccountPanel";
 import { MatchesClient } from "@/components/MatchesClient";
 import { DashboardStatsClient } from "@/components/DashboardStatsClient";
 import { DashboardHeroActions } from "@/components/DashboardHeroActions";
+import { JobDatabaseStatus } from "@/components/JobDatabaseStatus";
 import { jobMatches } from "@/lib/mock-data";
 
 export default function DashboardPage() {
@@ -21,6 +22,8 @@ export default function DashboardPage() {
       </div>
 
       <DashboardAccountPanel />
+
+      <JobDatabaseStatus />
 
       <DashboardStatsClient fallbackJobs={jobMatches} />
 

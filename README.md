@@ -32,6 +32,12 @@ The current product has a Next.js frontend, FastAPI backend, optional Gemini rec
 - Optionally encrypt stored resume files and extracted resume text with `JOBFIT_ENCRYPTION_KEY`.
 - Optional Gemini recruiter review that reranks the strongest candidates and enhances recommendation text.
 
+## Security Notes
+
+- The browser talks to the Next.js proxy and FastAPI backend; the Supabase service-role key must stay server-side only.
+- Supabase `jobfit_*` tables should have Row Level Security enabled and no direct `anon` / `authenticated` table grants.
+- Store production secrets in Railway, Amplify, or Supabase dashboards. Do not commit `.env` files or API keys.
+
 ## Local Setup
 
 Backend:
@@ -197,4 +203,3 @@ GEMINI_RECRUITER_TARGET_SIZE=10
 GEMINI_RECRUITER_MAX_CANDIDATES=25
 GEMINI_RECRUITER_SCORE_WEIGHT=0.20
 ```
-
