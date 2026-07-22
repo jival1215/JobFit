@@ -1,10 +1,10 @@
-"""FastAPI entrypoint for deployment hosts that auto-detect app.py.
+"""FastAPI entrypoint shim for deployment hosts that auto-detect app.py.
 
-The legacy Streamlit UI lives in streamlit_app.py. The production API lives
-in backend_api.py, and this module exposes its top-level FastAPI app for
-platforms that expect `app:app`.
+The production API lives in backend/backend_api.py. Importing `app` here lets
+Railway-style hosts use `app:app` while the code stays organized in the
+backend package.
 """
 
-from backend_api import app
+from backend.backend_api import app
 
 __all__ = ["app"]

@@ -1,6 +1,6 @@
 import unittest
 
-from skills import extract_skills
+from backend.skills import extract_skills
 
 
 class SkillTests(unittest.TestCase):

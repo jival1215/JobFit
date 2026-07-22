@@ -1,3 +1,5 @@
+> Legacy reference only. The active production path is Amplify frontend + Railway backend + Supabase storage/Auth.
+
 # AWS Deployment Guide
 
 This repo is prepared for a staged AWS deployment using current AWS guidance:

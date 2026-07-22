@@ -5,11 +5,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from saved_jobs import make_job_id
-
 
 DEFAULT_SEEN_FILE = Path("seen_jobs.csv")
 SEEN_COLUMNS = ["job_id", "company", "role", "location", "application_link", "source", "first_seen", "last_seen"]
+
+
+def make_job_id(company: str, role: str, location: str, application_link: str) -> str:
+    return "|".join([company.strip().lower(), role.strip().lower(), location.strip().lower(), application_link.strip().lower()])
 
 
 def _job_id(row: pd.Series) -> str:

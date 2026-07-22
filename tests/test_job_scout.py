@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from job_scout import mark_new_jobs
+from backend.job_scout import mark_new_jobs
 
 
 class JobScoutTests(unittest.TestCase):

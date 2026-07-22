@@ -1,6 +1,6 @@
 import unittest
 
-from simplify_fetcher import parse_job_postings, parse_jobright_jobs, parse_simplify_jobs
+from backend.simplify_fetcher import parse_job_postings, parse_jobright_jobs, parse_simplify_jobs
 
 
 class SimplifyFetcherTests(unittest.TestCase):

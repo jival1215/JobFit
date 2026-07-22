@@ -8,7 +8,7 @@ import os
 import secrets
 import sqlite3
 
-import supabase_store
+from . import supabase_store
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -651,3 +651,18 @@ def user_summary(user_id: int) -> dict[str, int]:
     for row in rows:
         summary[str(row["status"])] = int(row["count"])
     return summary
+
+
+def delete_user_data(user_id: int, token: str = "") -> None:
+    if supabase_store.configured():
+        supabase_store.delete_user_data(user_id)
+        if token:
+            supabase_store.delete_auth_user_for_token(token)
+        return
+    init_db()
+    with db_connection() as conn:
+        conn.execute("DELETE FROM saved_matches WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM match_runs WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM resumes WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))

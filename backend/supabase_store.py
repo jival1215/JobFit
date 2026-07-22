@@ -73,6 +73,73 @@ def _eq(value: Any) -> str:
     return f"eq.{value}"
 
 
+def _auth_headers(token: str | None = None) -> dict[str, str]:
+    api_key = os.getenv("SUPABASE_ANON_KEY", "").strip() or os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip() or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    headers = {"apikey": api_key}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def _supabase_auth_user(token: str) -> dict[str, Any] | None:
+    if not configured() or not token:
+        return None
+    response = requests.get(f"{_base_url()}/auth/v1/user", headers=_auth_headers(token), timeout=10)
+    if response.status_code != 200:
+        return None
+    payload = response.json()
+    email = str(payload.get("email") or "").strip().lower()
+    if not email:
+        return None
+    metadata = payload.get("user_metadata") or {}
+    full_name = str(metadata.get("full_name") or metadata.get("name") or "").strip()
+    first_name = str(metadata.get("first_name") or "").strip()
+    last_name = str(metadata.get("last_name") or "").strip()
+    if full_name and not first_name:
+        parts = full_name.split()
+        first_name = parts[0]
+        last_name = " ".join(parts[1:])
+    return {"authId": str(payload.get("id") or ""), "email": email, "firstName": first_name, "lastName": last_name}
+
+
+def _get_or_create_external_user(auth_user: dict[str, Any]) -> dict[str, Any]:
+    rows = _request("GET", "users", params={"select": "id,email,first_name,last_name,created_at", "email": _eq(auth_user["email"]), "limit": "1"})
+    if rows:
+        user = _user_dict(rows[0])
+    else:
+        created = _request(
+            "POST",
+            "users",
+            payload={
+                "email": auth_user["email"],
+                "first_name": auth_user.get("firstName", ""),
+                "last_name": auth_user.get("lastName", ""),
+                "password_hash": f"supabase_auth${auth_user.get('authId', '')}",
+                "created_at": utc_now(),
+            },
+            prefer="return=representation",
+        )
+        user = _user_dict(created[0])
+    user["authProvider"] = "supabase"
+    user["externalAuthId"] = auth_user.get("authId", "")
+    return user
+
+
+def delete_auth_user_for_token(token: str) -> None:
+    auth_user = _supabase_auth_user(token)
+    auth_id = auth_user.get("authId") if auth_user else ""
+    if not auth_id:
+        return
+    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not service_key:
+        return
+    requests.delete(
+        f"{_base_url()}/auth/v1/admin/users/{auth_id}",
+        headers={"apikey": service_key, "Authorization": f"Bearer {service_key}"},
+        timeout=10,
+    )
+
+
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
@@ -194,14 +261,15 @@ def user_from_token(token: str | None) -> dict[str, Any] | None:
     if not token:
         return None
     rows = _request("GET", "sessions", params={"select": "token,user_id,expires_at", "token": _eq(_hash_token(token)), "limit": "1"})
-    if not rows:
-        return None
-    expires_at = datetime.fromisoformat(str(rows[0]["expires_at"]))
-    if expires_at <= datetime.now(timezone.utc):
-        delete_session(token)
-        return None
-    users = _request("GET", "users", params={"select": "id,email,first_name,last_name,created_at", "id": _eq(int(rows[0]["user_id"])), "limit": "1"})
-    return _user_dict(users[0]) if users else None
+    if rows:
+        expires_at = datetime.fromisoformat(str(rows[0]["expires_at"]))
+        if expires_at <= datetime.now(timezone.utc):
+            delete_session(token)
+            return None
+        users = _request("GET", "users", params={"select": "id,email,first_name,last_name,created_at", "id": _eq(int(rows[0]["user_id"])), "limit": "1"})
+        return _user_dict(users[0]) if users else None
+    auth_user = _supabase_auth_user(token)
+    return _get_or_create_external_user(auth_user) if auth_user else None
 
 
 def save_resume_record(user_id: int, filename: str, content_type: str, data: bytes, extracted_text: str) -> dict[str, Any]:
@@ -443,3 +511,9 @@ def job_cache_summary() -> list[dict[str, Any]]:
         }
         for row in rows
     ]
+
+
+def delete_user_data(user_id: int) -> None:
+    for table in ["saved_matches", "match_runs", "resumes", "sessions"]:
+        _request("DELETE", table, params={"user_id": _eq(user_id)})
+    _request("DELETE", "users", params={"id": _eq(user_id)})

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -50,7 +51,14 @@ def _safe_json_loads(text: str) -> dict[str, Any]:
     return parsed
 
 
-def _sanitize_recommendations(payload: dict[str, Any]) -> dict[str, Any]:
+def _resume_supports_claim(claim: str, resume_text: str) -> bool:
+    claim_words = {word.lower() for word in re.findall(r"[a-zA-Z][a-zA-Z0-9+#.-]{2,}", claim)}
+    resume_words = {word.lower() for word in re.findall(r"[a-zA-Z][a-zA-Z0-9+#.-]{2,}", resume_text)}
+    meaningful = {word for word in claim_words if word not in {"the", "and", "for", "with", "this", "that", "your", "resume", "role"}}
+    return bool(meaningful and len(meaningful & resume_words) >= min(2, len(meaningful)))
+
+
+def _sanitize_recommendations(payload: dict[str, Any], resume_text: str = "") -> dict[str, Any]:
     sanitized: dict[str, Any] = {}
     if payload.get("personalizedSummary"):
         sanitized["personalizedSummary"] = str(payload["personalizedSummary"]).strip()
@@ -75,7 +83,7 @@ def _sanitize_recommendations(payload: dict[str, Any]) -> dict[str, Any]:
             current = str(item.get("current", "")).strip()
             suggestion = str(item.get("suggestion", "")).strip()
             reason = str(item.get("reason", "")).strip()
-            if current and suggestion:
+            if current and suggestion and (not resume_text or current.lower() in resume_text.lower()):
                 cleaned_changes.append(
                     {
                         "current": current,
@@ -226,32 +234,50 @@ def _generate_json(prompt: str, schema: dict[str, Any], timeout: int | None = No
         return {}
 
     model = os.getenv("GEMINI_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
-    response = requests.post(
-        GEMINI_ENDPOINT.format(model=model),
-        params={"key": api_key},
-        json={
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "temperature": 0.2,
-                "maxOutputTokens": _gemini_max_tokens(),
-                "responseMimeType": "application/json",
-                "thinkingConfig": {"thinkingBudget": 0},
-                "responseSchema": schema,
-            },
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": _gemini_max_tokens(),
+            "responseMimeType": "application/json",
+            "thinkingConfig": {"thinkingBudget": 0},
+            "responseSchema": schema,
         },
-        timeout=timeout or _gemini_timeout(),
-    )
-    response.raise_for_status()
-    data = response.json()
-    text = data["candidates"][0]["content"]["parts"][0]["text"]
-    return _safe_json_loads(text)
+    }
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            response = requests.post(
+                GEMINI_ENDPOINT.format(model=model),
+                params={"key": api_key},
+                json=payload,
+                timeout=timeout or _gemini_timeout(),
+            )
+            if getattr(response, "status_code", 200) in {429, 500, 502, 503, 504}:
+                response.raise_for_status()
+            response.raise_for_status()
+            data = response.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            return _safe_json_loads(text)
+        except (requests.Timeout, requests.ConnectionError, requests.HTTPError) as exc:
+            last_error = exc
+            status_code = getattr(getattr(exc, "response", None), "status_code", None)
+            if status_code and status_code not in {429, 500, 502, 503, 504}:
+                raise
+            if attempt < 2:
+                time.sleep(0.35 * (attempt + 1))
+                continue
+            raise
+    if last_error:
+        raise last_error
+    return {}
 
 
 def get_gemini_recommendations(row: pd.Series, resume_text: str, timeout: int | None = None) -> dict[str, Any]:
     if not os.getenv("GEMINI_API_KEY", "").strip():
         return {}
     payload = _generate_json(_build_prompt(row, resume_text), _recommendation_schema(), timeout=timeout)
-    return _sanitize_recommendations(payload)
+    return _sanitize_recommendations(payload, resume_text)
 
 
 
@@ -297,15 +323,16 @@ Return JSON:
 """.strip()
 
 
-def _sanitize_agent_score(payload: dict[str, Any]) -> dict[str, Any]:
+def _sanitize_agent_score(payload: dict[str, Any], resume_text: str = "") -> dict[str, Any]:
     try:
         score = float(payload.get("recruiterRelatednessScore", 0))
     except (TypeError, ValueError):
         score = 0.0
+    evidence = [item for item in _as_list(payload.get("relatedEvidence"), 6) if not resume_text or _resume_supports_claim(item, resume_text)]
     return {
         "recruiterRelatednessScore": round(max(0.0, min(100.0, score)), 1),
         "recruiterRelatednessReasoning": str(payload.get("reasoning", "")).strip(),
-        "recruiterRelatedEvidence": _as_list(payload.get("relatedEvidence"), 6),
+        "recruiterRelatedEvidence": evidence,
         "recruiterRelatedConcerns": _as_list(payload.get("concerns"), 6),
     }
 
@@ -314,7 +341,7 @@ def get_recruiter_relatedness(row: pd.Series, resume_text: str, timeout: int | N
     if not os.getenv("GEMINI_API_KEY", "").strip():
         return {}
     payload = _generate_json(_build_recruiter_relatedness_prompt(row, resume_text), _score_schema(), timeout=timeout)
-    return _sanitize_agent_score(payload)
+    return _sanitize_agent_score(payload, resume_text)
 
 
 def _final_score(base_score: float, agent_score: float, ai_weight: float) -> float:

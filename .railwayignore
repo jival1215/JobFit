@@ -10,3 +10,7 @@ __pycache__/
 saved_jobs.csv
 seen_jobs.csv
 .DS_Store
+legacy/
+docs/
+tests/
+*.md

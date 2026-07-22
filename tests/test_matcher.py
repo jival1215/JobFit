@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from matcher import rank_jobs
+from backend.matcher import rank_jobs
 
 
 class MatcherTests(unittest.TestCase):

@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from gemini_recommender import enrich_ranked_with_gemini, gemini_enabled, get_gemini_recommendations, rerank_top_matches_with_recruiter_agent
+from backend.gemini_recommender import enrich_ranked_with_gemini, gemini_enabled, get_gemini_recommendations, rerank_top_matches_with_recruiter_agent
 
 
 class GeminiRecommenderTests(unittest.TestCase):
@@ -34,7 +34,7 @@ class GeminiRecommenderTests(unittest.TestCase):
         enriched = enrich_ranked_with_gemini(ranked, "Python SQL resume", limit=1)
         self.assertNotIn("ai_recommendations", enriched.columns)
 
-    @patch("gemini_recommender.requests.post")
+    @patch("backend.gemini_recommender.requests.post")
     def test_get_gemini_recommendations_parses_json(self, mocked_post):
         os.environ["GEMINI_API_KEY"] = "test-key"
 
@@ -90,7 +90,46 @@ class GeminiRecommenderTests(unittest.TestCase):
         self.assertEqual(recommendations["resumeKeywords"], ["SQL", "dashboards"])
         self.assertEqual(recommendations["resumeBulletChanges"][0]["current"], "Built a Python SQL dashboard.")
 
-    @patch("gemini_recommender.get_recruiter_relatedness")
+    @patch("backend.gemini_recommender.time.sleep", return_value=None)
+    @patch("backend.gemini_recommender.requests.post")
+    def test_gemini_retries_transient_timeout(self, mocked_post, _mocked_sleep):
+        os.environ["GEMINI_API_KEY"] = "test-key"
+
+        class Response:
+            status_code = 200
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"candidates": [{"content": {"parts": [{"text": json.dumps({"personalizedSummary": "Good fit", "matchExplanation": "Python SQL fit", "improvementTips": [], "resumeKeywords": [], "suggestedExperience": [], "resumeBulletChanges": []})}]}}]}
+
+        import requests
+        mocked_post.side_effect = [requests.Timeout("slow"), Response()]
+        row = pd.Series({"company": "Example", "role": "Data Analyst", "location": "Remote", "match_score": 80})
+        result = get_gemini_recommendations(row, "Built Python SQL dashboard.")
+        self.assertEqual(result["personalizedSummary"], "Good fit")
+        self.assertEqual(mocked_post.call_count, 2)
+
+    @patch("backend.gemini_recommender.requests.post")
+    def test_gemini_malformed_json_raises_for_fallback_handling(self, mocked_post):
+        os.environ["GEMINI_API_KEY"] = "test-key"
+
+        class Response:
+            status_code = 200
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"candidates": [{"content": {"parts": [{"text": "not json"}]}}]}
+
+        mocked_post.return_value = Response()
+        row = pd.Series({"company": "Example", "role": "Data Analyst", "location": "Remote", "match_score": 80})
+        with self.assertRaises(ValueError):
+            get_gemini_recommendations(row, "Built Python SQL dashboard.")
+
+    @patch("backend.gemini_recommender.get_recruiter_relatedness")
     def test_recruiter_agent_reviews_next_candidate_when_it_can_enter_top_10(self, mocked_relatedness):
         os.environ["ENABLE_GEMINI_RECOMMENDATIONS"] = "true"
         os.environ["GEMINI_API_KEY"] = "test-key"

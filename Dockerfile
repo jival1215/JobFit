@@ -14,8 +14,9 @@ COPY requirements-api.txt ./
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements-api.txt
 
-COPY backend_api.py app.py gemini_recommender.py job_scout.py jobfit_db.py supabase_store.py matcher.py resume_utils.py saved_jobs.py simplify_fetcher.py skills.py us_job_finder_fetcher.py ./
+COPY app.py ./
+COPY backend ./backend/
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "uvicorn backend_api:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "-c", "uvicorn backend.backend_api:app --host 0.0.0.0 --port ${PORT:-8080}"]

@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from backend_api import _records_from_ranked
+from backend.backend_api import _records_from_ranked
 
 
 class BackendApiTests(unittest.TestCase):

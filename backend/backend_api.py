@@ -2,27 +2,31 @@ from __future__ import annotations
 
 import json
 import hashlib
+import logging
 import math
 import os
 import re
+import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
 
 import pandas as pd
-from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from gemini_recommender import enrich_ranked_with_gemini, gemini_enabled, rerank_top_matches_with_recruiter_agent
-from job_scout import mark_new_jobs
-from jobfit_db import (
+from .gemini_recommender import enrich_ranked_with_gemini, gemini_enabled, rerank_top_matches_with_recruiter_agent
+from .job_scout import mark_new_jobs
+from .jobfit_db import (
     authenticate_user,
     create_session,
     create_user,
     delete_resume_record,
     delete_saved_match,
     delete_session,
+    delete_user_data,
     encryption_enabled,
     get_job_cache,
     get_resume_record,
@@ -39,13 +43,14 @@ from jobfit_db import (
     user_from_token,
     user_summary,
 )
-from matcher import rank_jobs
-from resume_utils import extract_resume_text
-from saved_jobs import load_statuses, merge_statuses, save_job_status, tracker_summary
-from simplify_fetcher import ALL_JOB_REPOS_SOURCE, JOB_SOURCES, fetch_markdown, parse_job_postings
+from .matcher import rank_jobs
+from .resume_utils import extract_resume_text, parse_resume_structure, validate_resume_upload
+from .simplify_fetcher import ALL_JOB_REPOS_SOURCE, JOB_SOURCES, fetch_markdown, parse_job_postings
 
 
 app = FastAPI(title="JobFIT API", version="0.1.0")
+logger = logging.getLogger("jobfit.api")
+
 
 
 def _bearer_token(authorization: str | None) -> str:
@@ -92,6 +97,42 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    request.state.request_id = request_id
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        latency_ms = round((time.perf_counter() - started) * 1000, 1)
+        logger.exception(
+            "jobfit_request_failed",
+            extra={
+                "request_id": request_id,
+                "path": request.url.path,
+                "method": request.method,
+                "latency_ms": latency_ms,
+                "error_type": exc.__class__.__name__,
+            },
+        )
+        raise
+    latency_ms = round((time.perf_counter() - started) * 1000, 1)
+    response.headers["x-request-id"] = request_id
+    response.headers["x-response-time-ms"] = str(latency_ms)
+    logger.info(
+        "jobfit_request",
+        extra={
+            "request_id": request_id,
+            "path": request.url.path,
+            "method": request.method,
+            "status_code": response.status_code,
+            "latency_ms": latency_ms,
+        },
+    )
+    return response
 
 
 class UploadedResume:
@@ -467,6 +508,16 @@ def remove_resume(resume_id: int, authorization: str | None = Header(default=Non
     return {"status": "deleted", "summary": user_summary(int(user["id"]))}
 
 
+@app.delete("/api/account")
+def delete_account(authorization: str | None = Header(default=None)) -> dict[str, str]:
+    token = _bearer_token(authorization)
+    user = _required_user(authorization)
+    delete_user_data(int(user["id"]), token)
+    if token:
+        delete_session(token)
+    return {"status": "deleted"}
+
+
 @app.get("/api/saved-matches")
 def saved_matches(authorization: str | None = Header(default=None)) -> dict[str, Any]:
     user = _required_user(authorization)
@@ -668,6 +719,9 @@ def _rank_resume_text(
     use_ai_recommendations: bool,
     user: dict[str, Any] | None,
     stored_resume: dict[str, Any] | None,
+    resume_structured: dict[str, Any] | None = None,
+    request_id: str = "",
+    started_at: float | None = None,
 ) -> dict[str, Any]:
     source = ALL_JOB_REPOS_SOURCE
     jobs, source_url, fetched_at, used_job_cache = _load_jobs_for_source(source)
@@ -694,8 +748,6 @@ def _rank_resume_text(
         except Exception as exc:
             ai_error = str(exc)
             ai_recruiter_rerank_enabled = False
-    if not user:
-        ranked = merge_statuses(ranked, load_statuses())
 
     max_returned_jobs = _bounded_int_env("JOBFIT_MAX_RETURNED_JOBS", 75, 25, 75)
     returned_ranked = ranked.head(max_returned_jobs)
@@ -708,7 +760,16 @@ def _rank_resume_text(
                 job["status"] = saved["status"]
                 job["notes"] = saved.get("notes", "")
 
+    ai_reviewed_count = int(ranked.get("ai_recruiter_relatedness_score", pd.Series(dtype=float)).notna().sum()) if "ai_recruiter_relatedness_score" in ranked else 0
+    ai_enhanced_count = sum(1 for job in records if job.get("aiEnhanced"))
+    ai_cost_estimate = round((ai_reviewed_count * 0.00008) + (ai_enhanced_count * 0.00012), 4)
     response_payload = {
+        "requestId": request_id or uuid.uuid4().hex[:12],
+        "latencyMs": round((time.perf_counter() - started_at) * 1000, 1) if started_at else None,
+        "warnings": [ai_error] if ai_error else [],
+        "aiProvider": "Gemini" if use_ai_recommendations and gemini_enabled() else "",
+        "aiCostEstimate": ai_cost_estimate,
+        "resumeStructured": resume_structured or parse_resume_structure(resume_text),
         "source": source,
         "sourceUrl": source_url,
         "fetchedAt": fetched_at,
@@ -722,10 +783,10 @@ def _rank_resume_text(
         "aiRecommendationsEnabled": bool(use_ai_recommendations and gemini_enabled()),
         "aiRecruiterRerankEnabled": ai_recruiter_rerank_enabled,
         "aiError": ai_error,
-        "aiRecruiterReviewedCount": int(ranked.get("ai_recruiter_relatedness_score", pd.Series(dtype=float)).notna().sum()) if "ai_recruiter_relatedness_score" in ranked else 0,
-        "aiEnhancedCount": sum(1 for job in records if job.get("aiEnhanced")),
+        "aiRecruiterReviewedCount": ai_reviewed_count,
+        "aiEnhancedCount": ai_enhanced_count,
         "jobs": records,
-        "tracker": user_summary(int(user["id"])) if user else tracker_summary(load_statuses()),
+        "tracker": user_summary(int(user["id"])) if user else {"Saved": 0, "Applied": 0, "Skipped": 0},
         "user": user,
         "resume": stored_resume,
         "resumeId": stored_resume["id"] if stored_resume else None,
@@ -742,6 +803,7 @@ def _rank_resume_text(
 
 @app.post("/api/rank")
 async def rank_resume(
+    request: Request,
     resume: UploadFile = File(...),
     source: str = Form(ALL_JOB_REPOS_SOURCE),
     preferred_roles: str = Form('["data","data science","data engineering","ai/ml"]'),
@@ -753,29 +815,53 @@ async def rank_resume(
     role_values = _parse_role_values(preferred_roles)
     location_values = [item.strip() for item in preferred_locations.split(",") if item.strip()]
     job_type_values = _parse_job_type_values(preferred_job_types)
+    started_at = time.perf_counter()
     data = await resume.read()
-    resume_text = extract_resume_text(UploadedResume(resume.filename or "resume", data))
+    filename = resume.filename or "resume"
+    try:
+        validate_resume_upload(filename, data)
+        resume_text = extract_resume_text(UploadedResume(filename, data))
+    except OverflowError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Could not extract text from resume") from exc
     if not resume_text:
         raise HTTPException(status_code=422, detail="Could not extract text from resume")
+    resume_structured = parse_resume_structure(resume_text)
 
     user = _optional_user(authorization)
     stored_resume = None
     if user:
         stored_resume = save_resume_record(
             int(user["id"]),
-            resume.filename or "resume",
+            filename,
             resume.content_type or "application/octet-stream",
             data,
             resume_text,
         )
 
-    return _rank_resume_text(resume_text, source, role_values, location_values, job_type_values, use_ai_recommendations, user, stored_resume)
+    return _rank_resume_text(
+        resume_text,
+        source,
+        role_values,
+        location_values,
+        job_type_values,
+        use_ai_recommendations,
+        user,
+        stored_resume,
+        resume_structured,
+        getattr(request.state, "request_id", ""),
+        started_at,
+    )
 
 
 @app.post("/api/rank/resume/{resume_id}")
 def rank_saved_resume(
     resume_id: int,
     payload: dict[str, Any],
+    request: Request,
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
     user = _required_user(authorization)
@@ -794,43 +880,36 @@ def rank_saved_resume(
     use_ai_recommendations = bool(payload.get("use_ai_recommendations") or payload.get("useAiRecommendations"))
     resume_text = str(stored_resume.pop("extractedText"))
 
-    return _rank_resume_text(resume_text, source, role_values, location_values, job_type_values, use_ai_recommendations, user, stored_resume)
+    return _rank_resume_text(
+        resume_text,
+        source,
+        role_values,
+        location_values,
+        job_type_values,
+        use_ai_recommendations,
+        user,
+        stored_resume,
+        resume_structured,
+        getattr(request.state, "request_id", ""),
+        started_at,
+    )
 
 
 @app.get("/api/tracker")
 def tracker(authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    user = _optional_user(authorization)
-    if user:
-        return {"summary": user_summary(int(user["id"])), "jobs": list_saved_matches(int(user["id"]))}
-    statuses = load_statuses()
-    return {"summary": tracker_summary(statuses), "jobs": statuses.fillna("").to_dict(orient="records")}
+    user = _required_user(authorization)
+    return {"summary": user_summary(int(user["id"])), "jobs": list_saved_matches(int(user["id"]))}
 
 
 @app.post("/api/status")
 def update_status(payload: dict[str, Any], authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user = _required_user(authorization)
     status = str(payload.get("status", ""))
-    job = {
-        "company": payload.get("company", ""),
-        "role": payload.get("role") or payload.get("title", ""),
-        "location": payload.get("location", ""),
-        "application_link": payload.get("applicationLink", ""),
-    }
-    user = _optional_user(authorization)
-    if user:
-        job_payload = dict(payload)
-        job_payload.setdefault("backendId", payload.get("backendId") or payload.get("id") or "")
-        job_payload.setdefault("company", job["company"])
-        job_payload.setdefault("title", job["role"])
-        job_payload.setdefault("location", job["location"])
-        job_payload.setdefault("applyUrl", job["application_link"])
-        result = save_user_match(int(user["id"]), job_payload, status, str(payload.get("notes", "")))
-        return {"status": "saved", **result, "summary": user_summary(int(user["id"]))}
-
-    save_job_status(
-        job,
-        status,
-        str(payload.get("notes", "")),
-        str(payload.get("appliedDate", "")),
-        str(payload.get("followUpDate", "")),
-    )
-    return {"status": "saved"}
+    job_payload = dict(payload)
+    job_payload.setdefault("backendId", payload.get("backendId") or payload.get("id") or "")
+    job_payload.setdefault("company", payload.get("company", ""))
+    job_payload.setdefault("title", payload.get("role") or payload.get("title", ""))
+    job_payload.setdefault("location", payload.get("location", ""))
+    job_payload.setdefault("applyUrl", payload.get("applicationLink", ""))
+    result = save_user_match(int(user["id"]), job_payload, status, str(payload.get("notes", "")))
+    return {"status": "saved", **result, "summary": user_summary(int(user["id"]))}

@@ -6,6 +6,8 @@ export type AuthResponse = { token: string; user: User };
 
 export type ResumeRecord = { id: number; filename: string; contentType: string; fileSize: number; sha256: string; encrypted: boolean; createdAt: string };
 
+export type ResumeStructured = { skills: string[]; projects: string[]; education: string[]; experienceBullets: string[]; keywords: string[] };
+
 export type AccountResponse = {
   user: User;
   summary: Record<string, number>;
@@ -56,12 +58,47 @@ export type RankResponse = {
   returnedCount?: number;
   maxReturnedJobs?: number;
   aiError?: string;
+  requestId?: string;
+  latencyMs?: number | null;
+  aiCostEstimate?: number;
+  aiProvider?: string;
+  resumeStructured?: ResumeStructured;
+  warnings?: string[];
 };
 
 const PROXY_API_BASE_URL = "/api/jobfit";
 
 export const API_BASE_URL = PROXY_API_BASE_URL;
 export const AUTH_TOKEN_KEY = "jobfit:auth-token";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "") || "";
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+
+function supabaseAuthEnabled() {
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+async function supabaseAuthRequest(path: string, body: Record<string, unknown>) {
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error_description || payload.msg || payload.message || "Supabase Auth request failed");
+  }
+  return payload;
+}
+
+async function backendUserFromToken(token: string): Promise<User> {
+  const response = await apiFetch("/api/auth/me", { headers: authHeaders(token) });
+  const account = await parseOrThrow(response, "Unable to load account");
+  return account.user;
+}
 
 export function getAuthToken() {
   if (typeof window === "undefined") return "";
@@ -136,6 +173,17 @@ export async function rankSavedResume(
 }
 
 export async function registerAccount(email: string, password: string, firstName = "", lastName = ""): Promise<AuthResponse> {
+  if (supabaseAuthEnabled()) {
+    const payload = await supabaseAuthRequest("signup", {
+      email,
+      password,
+      data: { first_name: firstName, last_name: lastName, full_name: `${firstName} ${lastName}`.trim() }
+    });
+    const token = payload.access_token || payload.session?.access_token;
+    if (!token) throw new Error("Account created. Check your email to confirm before signing in.");
+    const user = await backendUserFromToken(token);
+    return { token, user };
+  }
   const response = await apiFetch("/api/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -145,6 +193,13 @@ export async function registerAccount(email: string, password: string, firstName
 }
 
 export async function loginAccount(email: string, password: string): Promise<AuthResponse> {
+  if (supabaseAuthEnabled()) {
+    const payload = await supabaseAuthRequest("token?grant_type=password", { email, password });
+    const token = payload.access_token || payload.session?.access_token;
+    if (!token) throw new Error("Unable to start a Supabase session");
+    const user = await backendUserFromToken(token);
+    return { token, user };
+  }
   const response = await apiFetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -159,8 +214,27 @@ export async function fetchAccount(): Promise<AccountResponse> {
 }
 
 export async function logoutAccount() {
+  const token = getAuthToken();
+  if (supabaseAuthEnabled() && token) {
+    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` }
+    }).catch(() => null);
+  }
   await apiFetch("/api/auth/logout", { method: "POST", headers: authHeaders() }).catch(() => null);
   clearAuthToken();
+}
+
+export async function deleteResume(resumeId: number) {
+  const response = await apiFetch(`/api/resumes/${resumeId}`, { method: "DELETE", headers: authHeaders() });
+  return parseOrThrow(response, "Unable to delete resume");
+}
+
+export async function deleteAccount() {
+  const response = await apiFetch("/api/account", { method: "DELETE", headers: authHeaders() });
+  const result = await parseOrThrow(response, "Unable to delete account");
+  clearAuthToken();
+  return result;
 }
 
 export async function fetchSavedMatches(): Promise<SavedMatchesResponse> {

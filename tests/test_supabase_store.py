@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import Mock, patch
 
-import supabase_store
+import backend.supabase_store as supabase_store
 
 
 class SupabaseStoreTests(unittest.TestCase):
@@ -22,7 +22,7 @@ class SupabaseStoreTests(unittest.TestCase):
         response.json.return_value = payload if payload is not None else []
         return response
 
-    @patch("supabase_store.requests.request")
+    @patch("backend.supabase_store.requests.request")
     def test_create_user_uses_prefixed_supabase_tables(self, request):
         request.side_effect = [
             self._response([]),
@@ -39,7 +39,7 @@ class SupabaseStoreTests(unittest.TestCase):
         self.assertEqual(request.call_args_list[1].kwargs["json"]["last_name"], "Patel")
         self.assertEqual(request.call_args_list[1].kwargs["headers"]["Prefer"], "return=representation")
 
-    @patch("supabase_store.requests.request")
+    @patch("backend.supabase_store.requests.request")
     def test_save_match_run_stores_recommendation_payload(self, request):
         request.return_value = self._response([{"id": 42}])
 
@@ -63,7 +63,28 @@ class SupabaseStoreTests(unittest.TestCase):
         self.assertEqual(payload["jobs_json"][0]["recommendation"], "Apply")
         self.assertTrue(payload["ai_enabled"])
 
-    @patch("supabase_store.requests.request")
+    @patch("backend.supabase_store.requests.get")
+    @patch("backend.supabase_store.requests.request")
+    def test_supabase_auth_token_maps_to_jobfit_user(self, mocked_request, mocked_get):
+        class AuthResponse:
+            status_code = 200
+
+            def json(self):
+                return {"id": "auth-user-1", "email": "student@example.com", "user_metadata": {"first_name": "Jival", "last_name": "Patel"}}
+
+        mocked_get.return_value = AuthResponse()
+        mocked_request.side_effect = [
+            Mock(status_code=200, text="[]", json=lambda: []),
+            Mock(status_code=201, text='[{"id":7,"email":"student@example.com","first_name":"Jival","last_name":"Patel","created_at":"now"}]', json=lambda: [{"id": 7, "email": "student@example.com", "first_name": "Jival", "last_name": "Patel", "created_at": "now"}]),
+        ]
+
+        user = supabase_store.user_from_token("supabase-access-token")
+
+        self.assertEqual(user["email"], "student@example.com")
+        self.assertEqual(user["displayName"], "Jival Patel")
+        self.assertEqual(user["authProvider"], "supabase")
+
+    @patch("backend.supabase_store.requests.request")
     def test_job_cache_is_saved_to_supabase(self, request):
         request.return_value = self._response([])
 

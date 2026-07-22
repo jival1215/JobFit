@@ -6,7 +6,7 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from skills import extract_skills, format_skills, normalize_text
+from .skills import extract_skills, format_skills, normalize_text
 
 
 ROLE_KEYWORDS = {

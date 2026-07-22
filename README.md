@@ -1,8 +1,8 @@
 # JobFIT
 
-JobFIT is an AI-assisted job-matching platform for students and early-career candidates. Upload a resume, refresh real SimplifyJobs postings, rank opportunities by recruiter-style fit, and save the matches you want to track.
+JobFIT is a full-stack AI job-matching platform for students and early-career candidates. Users upload a resume, scan real internship and new-grad job feeds, rank opportunities by recruiter-style fit, and save the roles they want to apply to first.
 
-The current product has a Next.js frontend, FastAPI backend, optional Gemini recruiter review, and account storage that can run on local SQLite or Supabase for hosted users, resumes, saved jobs, and recommendation history.
+The active production path is **Amplify frontend + Railway FastAPI backend + Supabase Auth/storage**. AWS deployment work is preserved in `legacy/deployment-experiments/` as reference material, but it is not the current default deployment path.
 
 ## Live Links
 
@@ -10,33 +10,48 @@ The current product has a Next.js frontend, FastAPI backend, optional Gemini rec
 - Backend API: https://jobfit-api-production.up.railway.app
 - API health check: https://jobfit-api-production.up.railway.app/api/health
 
-## Features
+## What It Does
 
-- Upload resumes as PDF, DOCX, or TXT.
-- Extract resume text locally.
-- Fetch postings from SimplifyJobs and Jobright GitHub job repositories.
-- Parse changing GitHub markdown/HTML job tables, including Simplify HTML tables and Jobright markdown tables.
-- Cache parsed job postings in SQLite or Supabase so resume scans can rank from stored rows instead of re-fetching every repo each time.
-- Extract company, role, location, application link, age, and category.
-- Rank jobs using keyword similarity, skill overlap, role title fit, location preference, and posting freshness.
-- Show Top 10 Apply First jobs.
-- Show missing skills to learn.
-- Show resume tailoring tips per job.
-- Filter by role, location, company, and minimum score.
-- Export ranked results to CSV.
-- Create user accounts and sign in with token-based auth.
-- Store first and last name on signup so the dashboard can greet users by name instead of email.
-- Save uploaded resume records, match runs, recommendations, and user-specific Saved, Applied, and Skipped jobs.
-- Reuse saved resumes for future scans without uploading the same file again.
-- Use local SQLite for development or Supabase for hosted account/resume/recommendation storage.
-- Optionally encrypt stored resume files and extracted resume text with `JOBFIT_ENCRYPTION_KEY`.
-- Optional Gemini recruiter review that reranks the strongest candidates and enhances recommendation text.
+- Uploads PDF, DOCX, and TXT resumes with type and size validation.
+- Extracts and normalizes resume text, then builds structured resume data: skills, projects, education, experience bullets, and keywords.
+- Pulls jobs from SimplifyJobs and Jobright GitHub repositories.
+- Caches job postings in SQLite locally or Supabase in production so scans can run faster.
+- Ranks jobs using deterministic scoring: resume/job similarity, skill overlap, role fit, location preference, and posting freshness.
+- Optionally uses Gemini only for recruiter-style recommendations, evidence-backed feedback, resume bullet suggestions, and final review of top candidates.
+- Supports accounts, saved resumes, match runs, saved/applied/skipped jobs, and account/resume deletion.
+- Keeps service-role Supabase access on the backend only.
 
-## Security Notes
+## Architecture
 
-- The browser talks to the Next.js proxy and FastAPI backend; the Supabase service-role key must stay server-side only.
-- Supabase `jobfit_*` tables should have Row Level Security enabled and no direct `anon` / `authenticated` table grants.
-- Store production secrets in Railway, Amplify, or Supabase dashboards. Do not commit `.env` files or API keys.
+```mermaid
+flowchart LR
+  U["User"] --> F["Next.js frontend"]
+  F --> A["FastAPI backend"]
+  A --> R["Resume parser"]
+  A --> J["GitHub job fetcher + cache"]
+  A --> M["Deterministic matcher"]
+  M --> G["Gemini recommendation layer"]
+  A --> S["Supabase Auth + storage"]
+  A --> F
+```
+
+## Active Repo Structure
+
+```text
+JobFit/
+  app.py                         # tiny host shim for app:app platforms
+  backend/                       # active FastAPI backend package
+  frontend/                      # active Next.js app
+  docs/                          # architecture, setup, security, file map
+  infra/                         # active infrastructure config, when needed
+  legacy/                        # archived old/experimental code
+  tests/                         # active backend unit tests
+  Dockerfile                     # Railway/container backend deploy
+  Procfile                       # Procfile backend deploy command
+  nixpacks.toml                  # Railway backend build config
+  amplify.yml                    # Amplify frontend build config
+  requirements-api.txt           # active backend dependencies
+```
 
 ## Local Setup
 
@@ -46,7 +61,7 @@ Backend:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-api.txt
-uvicorn backend_api:app --reload --port 8000
+uvicorn backend.backend_api:app --reload --port 8000
 ```
 
 Frontend:
@@ -57,58 +72,42 @@ npm install
 NEXT_PUBLIC_JOBFIT_API_URL=http://127.0.0.1:8000 npm run dev
 ```
 
-Local accounts, stored resume records, saved matches, and match runs are stored in `jobfit_local.db` by default. If `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set, the backend stores account data in Supabase instead. To use a different local database path:
+Local development uses `jobfit_local.db` unless Supabase environment variables are set.
+
+## Environment Variables
+
+Backend production variables:
 
 ```bash
-JOBFIT_DB_PATH=/path/to/jobfit_local.db uvicorn backend_api:app --reload --port 8000
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+SUPABASE_ANON_KEY=your_anon_or_publishable_key
+SUPABASE_TABLE_PREFIX=jobfit_
+JOBFIT_ENCRYPTION_KEY=your_fernet_key
+JOBFIT_JOB_CACHE_TTL_MINUTES=360
+GEMINI_API_KEY=your_gemini_key
+ENABLE_GEMINI_RECOMMENDATIONS=true
+FRONTEND_ORIGINS=https://main.d8rnzmcb1hxs.amplifyapp.com,http://localhost:3000,http://127.0.0.1:3000
 ```
 
-To encrypt stored resume files and extracted resume text, create a Fernet key and set it as an environment variable before starting the backend:
+Frontend production variables:
 
 ```bash
+NEXT_PUBLIC_JOBFIT_API_URL=https://jobfit-api-production.up.railway.app
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_or_publishable_key
+```
+
+Generate a local encryption key with:
+
+```bash
+python3 -m pip install cryptography
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-JOBFIT_ENCRYPTION_KEY=your_generated_key uvicorn backend_api:app --reload --port 8000
 ```
 
-## Testing
+## Job Sources
 
-```bash
-python3 -m unittest discover -s tests
-```
-
-## Project Structure
-
-```text
-JobFit/
-  backend_api.py
-  app.py
-  frontend/
-    app/
-    components/
-    lib/
-  simplify_fetcher.py
-  resume_utils.py
-  matcher.py
-  skills.py
-  jobfit_db.py
-  supabase_store.py
-  gemini_recommender.py
-  docs/
-    supabase-schema.sql
-    aws-deployment.md
-  saved_jobs.py
-  requirements.txt
-  requirements-api.txt
-  README.md
-  tests/
-    test_matcher.py
-    test_simplify_fetcher.py
-    test_skills.py
-```
-
-## Notes
-
-The default product source is `All job repos`, which combines these GitHub-backed feeds:
+The default source is `All job repos`, which combines:
 
 ```text
 SimplifyJobs/Summer2026-Internships README.md
@@ -121,85 +120,30 @@ jobright-ai/2026-Software-Engineer-Internship README.md
 jobright-ai/2026-Public-Sector-Internship README.md
 ```
 
-The backend caches parsed postings per source in `job_cache` / `jobfit_job_cache`. Set `JOBFIT_JOB_CACHE_TTL_MINUTES` to control refresh frequency. The default is 360 minutes.
+The backend caches parsed postings per source. Set `JOBFIT_JOB_CACHE_TTL_MINUTES` to control refresh frequency.
 
-## Deployment
+## Testing
 
-### AWS
-
-This repo is now prepared to host both sides on AWS:
-
-- Frontend: AWS Amplify Hosting using `amplify.yml`.
-- Backend: Amazon ECS Express Mode using the root `Dockerfile` and `requirements-api.txt`.
-
-See `docs/aws-deployment.md` for the ECS Express Mode and Amplify deployment checklist.
-
-### Railway + Supabase
-
-Railway can host the FastAPI backend from this repo using `nixpacks.toml` and `requirements-api.txt`. Supabase can store accounts, sessions, resume records, match runs, saved jobs, cached job postings, and recommendation payloads. Run `docs/supabase-schema.sql` in the Supabase SQL editor, then set these Railway variables:
+Backend:
 
 ```bash
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-SUPABASE_TABLE_PREFIX=jobfit_
-JOBFIT_JOB_CACHE_TTL_MINUTES=360
-JOBFIT_ENCRYPTION_KEY=your_fernet_key
-GEMINI_API_KEY=your_gemini_key
-ENABLE_GEMINI_RECOMMENDATIONS=true
-FRONTEND_ORIGINS=https://main.d8rnzmcb1hxs.amplifyapp.com,http://localhost:3000,http://127.0.0.1:3000
+python3 -m unittest discover -s tests
 ```
 
-Keep `SUPABASE_SERVICE_ROLE_KEY` server-side only. Do not put it in the Next.js frontend. Generate `JOBFIT_ENCRYPTION_KEY` with:
+Frontend:
 
 ```bash
-python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+cd frontend
+npm run build
+npm audit --omit=dev
 ```
 
-### Other Hosts
+## Production Notes
 
-The FastAPI backend lives in `backend_api.py`. Auth, stored resume records, saved matches, and match-run recommendation history live in `jobfit_db.py`, which automatically uses Supabase when configured and SQLite otherwise. For deployment hosts that auto-detect `app.py`, this repo includes a tiny `app.py` shim that exposes `backend_api.app`. The legacy Streamlit UI is preserved as `streamlit_app.py`. You can still set the backend start command explicitly:
+- Use Railway for the FastAPI backend with `uvicorn backend.backend_api:app --host 0.0.0.0 --port $PORT`.
+- Use Amplify for the Next.js frontend from the `frontend/` directory.
+- Use Supabase Auth for production accounts. The backend still supports the old custom token flow as a compatibility fallback.
+- Keep `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, and `JOBFIT_ENCRYPTION_KEY` server-side only.
+- Run `docs/supabase-schema.sql` in Supabase, keep RLS enabled, and do not grant direct table access to browser roles.
 
-```bash
-uvicorn backend_api:app --host 0.0.0.0 --port $PORT
-```
-
-For Render, this repo includes `render.yaml` with that command. For Procfile-based hosts, this repo includes:
-
-```bash
-web: uvicorn backend_api:app --host 0.0.0.0 --port $PORT
-```
-
-The Next.js frontend should be deployed from the `frontend/` directory and configured with:
-
-```bash
-NEXT_PUBLIC_JOBFIT_API_URL=https://jobfit-api-production.up.railway.app
-```
-
-
-Account/resume storage settings:
-
-```bash
-# SQLite fallback
-JOBFIT_DB_PATH=jobfit_local.db
-
-# Supabase hosted storage
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-SUPABASE_TABLE_PREFIX=jobfit_
-
-# Shared account settings
-JOBFIT_SESSION_DAYS=14
-JOBFIT_ENCRYPTION_KEY=your_fernet_key
-```
-
-Optional Gemini recommendation settings for the backend:
-
-```bash
-GEMINI_API_KEY=your_key_here
-GEMINI_MODEL=gemini-2.5-flash
-ENABLE_GEMINI_RECOMMENDATIONS=true
-GEMINI_RECOMMENDATION_LIMIT=5
-GEMINI_RECRUITER_TARGET_SIZE=10
-GEMINI_RECRUITER_MAX_CANDIDATES=25
-GEMINI_RECRUITER_SCORE_WEIGHT=0.20
-```
+More detail is in `docs/architecture.md`, `docs/file-map.md`, `docs/production-readiness.md`, and `docs/environment.md`.

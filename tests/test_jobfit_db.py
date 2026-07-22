@@ -8,7 +8,7 @@ try:
 except ImportError:
     Fernet = None
 
-import jobfit_db
+import backend.jobfit_db as jobfit_db
 
 
 class JobfitDbTests(unittest.TestCase):
@@ -110,6 +110,19 @@ class JobfitDbTests(unittest.TestCase):
         )
         self.assertGreater(run_id, 0)
         self.assertEqual(jobfit_db.list_match_runs(user["id"])[0]["resumeId"], resume["id"])
+
+    def test_delete_user_data_removes_account_records(self):
+        user = jobfit_db.create_user("delete@example.com", "password123")
+        resume = jobfit_db.save_resume_record(user["id"], "resume.txt", "text/plain", b"Python", "Python SQL resume")
+        jobfit_db.save_match_run(user["id"], {"resumeId": resume["id"], "source": "All", "count": 1, "jobs": []})
+        jobfit_db.save_user_match(user["id"], {"id": "job-1", "company": "Example", "title": "Analyst"}, "Saved")
+        token = jobfit_db.create_session(user["id"])
+
+        jobfit_db.delete_user_data(user["id"])
+
+        self.assertIsNone(jobfit_db.user_from_token(token))
+        self.assertEqual(jobfit_db.list_resumes(user["id"]), [])
+        self.assertEqual(jobfit_db.list_saved_matches(user["id"]), [])
 
     def test_resume_record_uses_encryption_key_when_configured(self):
         if Fernet is None:

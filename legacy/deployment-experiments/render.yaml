@@ -1,9 +1,10 @@
+# Legacy reference only. Current backend production deploy uses Railway.
 services:
   - type: web
     name: jobfit-api
     env: python
     buildCommand: pip install -r requirements-api.txt
-    startCommand: uvicorn backend_api:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn backend.backend_api:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9

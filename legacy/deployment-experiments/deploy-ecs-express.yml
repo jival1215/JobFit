@@ -1,3 +1,4 @@
+# Legacy reference only. This file is intentionally outside .github/workflows, so it does not run.
 name: Build and Deploy Backend to ECS Express Mode
 
 on:
@@ -6,14 +7,14 @@ on:
     branches:
       - main
     paths:
-      - backend_api.py
+      - backend/**
       - gemini_recommender.py
       - jobfit_db.py
       - matcher.py
       - simplify_fetcher.py
       - skills.py
       - resume_utils.py
-      - saved_jobs.py
+      - legacy/streamlit/saved_jobs.py
       - requirements*.txt
       - Dockerfile
       - .github/workflows/deploy-ecs-express.yml
