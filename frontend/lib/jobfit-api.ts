@@ -53,15 +53,25 @@ export function getAuthToken() {
   return window.localStorage.getItem(AUTH_TOKEN_KEY) || "";
 }
 
+export const AUTH_CHANGED_EVENT = "jobfit:auth-changed";
+
+export function notifyAuthChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+  }
+}
+
 export function setAuthToken(token: string) {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+    notifyAuthChanged();
   }
 }
 
 export function clearAuthToken() {
   if (typeof window !== "undefined") {
     window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    notifyAuthChanged();
   }
 }
 

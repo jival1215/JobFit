@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AUTH_CHANGED_EVENT, fetchAccount, getAuthToken } from "@/lib/jobfit-api";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
@@ -23,11 +24,40 @@ export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [pendingHref, setPendingHref] = useState("");
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [accountLabel, setAccountLabel] = useState("Account");
   const pendingItem = navItems.find((item) => item.href === pendingHref);
 
   useEffect(() => {
     setPendingHref("");
   }, [pathname]);
+
+  useEffect(() => {
+    async function loadAccountState() {
+      if (!getAuthToken()) {
+        setIsSignedIn(false);
+        setAccountLabel("Account");
+        return;
+      }
+
+      try {
+        const account = await fetchAccount();
+        setIsSignedIn(true);
+        setAccountLabel(account.user.firstName || account.user.displayName || "Account");
+      } catch {
+        setIsSignedIn(false);
+        setAccountLabel("Account");
+      }
+    }
+
+    loadAccountState();
+    window.addEventListener(AUTH_CHANGED_EVENT, loadAccountState);
+    window.addEventListener("storage", loadAccountState);
+    return () => {
+      window.removeEventListener(AUTH_CHANGED_EVENT, loadAccountState);
+      window.removeEventListener("storage", loadAccountState);
+    };
+  }, []);
 
   useEffect(() => {
     for (const item of navItems) {
@@ -90,7 +120,7 @@ export function Navbar() {
             onClick={() => beginNavigation("/account")}
             className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-ink shadow-sm transition hover:bg-slate-50"
           >
-            Sign in
+            {isSignedIn ? accountLabel : "Sign in"}
           </Link>
           <Link
             href="/upload"

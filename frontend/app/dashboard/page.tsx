@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { DashboardAccountPanel } from "@/components/DashboardAccountPanel";
 import { MatchesClient } from "@/components/MatchesClient";
 import { DashboardStatsClient } from "@/components/DashboardStatsClient";
+import { DashboardHeroActions } from "@/components/DashboardHeroActions";
 import { jobMatches } from "@/lib/mock-data";
 
 export default function DashboardPage() {
@@ -16,20 +16,7 @@ export default function DashboardPage() {
               Reuse saved resumes, review ranked matches, track saved jobs, and open role-specific feedback from one focused workspace.
             </p>
           </div>
-          <div className="flex flex-col justify-center gap-4 p-8 sm:p-10">
-            <p className="text-sm leading-6 text-slateSoft">Sign in to reuse saved resumes and keep scan history, or run a fresh scan from an uploaded file.</p>
-            <div className="flex flex-wrap gap-3">
-              <Link href="/account" className="inline-flex w-fit rounded-full border border-line bg-white px-5 py-3 text-sm font-bold text-ink hover:bg-slate-50">
-                Sign in
-              </Link>
-              <Link href="/upload" className="inline-flex w-fit rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white hover:bg-brand-700">
-                Run scan
-              </Link>
-              <Link href="/saved" className="inline-flex w-fit rounded-full border border-line bg-white px-5 py-3 text-sm font-bold text-ink hover:bg-slate-50">
-                Saved jobs
-              </Link>
-            </div>
-          </div>
+          <DashboardHeroActions />
         </div>
       </div>
 
